@@ -49,6 +49,9 @@ function setupCanvasEvents() {
     canvas.on('object:added', handleObjectAdded);
     canvas.on('object:removed', handleObjectRemoved);
 
+    // Object movement (disable connectors during drag)
+    canvas.on('object:moving', handleObjectMoving);
+
     // Double-click to add text to shapes
     canvas.on('mouse:dblclick', handleDoubleClick);
 
@@ -151,9 +154,16 @@ function handleSelectionCleared() {
 }
 
 /**
- * Handle object modification
+ * Handle object modification (when drag/resize/rotate ends)
  */
 function handleObjectModified(e) {
+    // Re-enable connectors after movement
+    canvas.getObjects().forEach(obj => {
+        if (obj.isConnector || obj.isConnectorArrow) {
+            obj.evented = true;
+        }
+    });
+
     saveCanvasState();
 }
 
@@ -169,6 +179,25 @@ function handleObjectAdded(e) {
  */
 function handleObjectRemoved(e) {
     saveCanvasState();
+}
+
+/**
+ * Handle object moving - disable connector interaction during drag
+ */
+function handleObjectMoving(e) {
+    const movingObject = e.target;
+
+    // Skip if it's a connector itself
+    if (movingObject.isConnector || movingObject.isConnectorArrow) {
+        return;
+    }
+
+    // Disable all connectors temporarily to prevent interference
+    canvas.getObjects().forEach(obj => {
+        if (obj.isConnector || obj.isConnectorArrow) {
+            obj.evented = false;
+        }
+    });
 }
 
 /**
@@ -384,6 +413,13 @@ function handleMouseMove(opt) {
 function handleMouseUp() {
     isPanning = false;
     canvas.selection = true;
+
+    // Re-enable connectors when mouse is released
+    canvas.getObjects().forEach(obj => {
+        if (obj.isConnector || obj.isConnectorArrow) {
+            obj.evented = true;
+        }
+    });
 }
 
 /**

@@ -79,6 +79,7 @@ class Connector {
             connectorId: this.id,
             isConnector: true,
             hoverCursor: 'pointer',
+            evented: true, // Can receive mouse events
             // Store original colors for hover/selection effects
             _originalStroke: this.strokeColor,
             _originalStrokeWidth: this.strokeWidth
@@ -239,6 +240,160 @@ class Connector {
     }
 
     /**
+     * Check if a line segment intersects with any shapes (except connected ones)
+     */
+    doesLineIntersectShapes(x1, y1, x2, y2) {
+        const allObjects = canvas.getObjects();
+        const MARGIN = 10; // Add 10px margin around shapes
+
+        for (let obj of allObjects) {
+            // Skip connectors, connection handles, and the shapes we're connected to
+            if (obj.isConnector || obj.isConnectionHandle ||
+                obj === this.fromShape || obj === this.toShape) {
+                continue;
+            }
+
+            const bounds = obj.getBoundingRect(true);
+
+            // Expand bounds by margin
+            const left = bounds.left - MARGIN;
+            const right = bounds.left + bounds.width + MARGIN;
+            const top = bounds.top - MARGIN;
+            const bottom = bounds.top + bounds.height + MARGIN;
+
+            // Check if line segment intersects with expanded rectangle
+            if (this.lineIntersectsRect(x1, y1, x2, y2, left, top, right, bottom)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if line segment intersects with rectangle
+     */
+    lineIntersectsRect(x1, y1, x2, y2, rectLeft, rectTop, rectRight, rectBottom) {
+        // Check if either endpoint is inside rectangle
+        if ((x1 >= rectLeft && x1 <= rectRight && y1 >= rectTop && y1 <= rectBottom) ||
+            (x2 >= rectLeft && x2 <= rectRight && y2 >= rectTop && y2 <= rectBottom)) {
+            return true;
+        }
+
+        // Check if line intersects any of the 4 rectangle edges
+        return this.lineSegmentsIntersect(x1, y1, x2, y2, rectLeft, rectTop, rectRight, rectTop) ||    // Top edge
+               this.lineSegmentsIntersect(x1, y1, x2, y2, rectRight, rectTop, rectRight, rectBottom) || // Right edge
+               this.lineSegmentsIntersect(x1, y1, x2, y2, rectLeft, rectBottom, rectRight, rectBottom) || // Bottom edge
+               this.lineSegmentsIntersect(x1, y1, x2, y2, rectLeft, rectTop, rectLeft, rectBottom);    // Left edge
+    }
+
+    /**
+     * Check if two line segments intersect
+     */
+    lineSegmentsIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
+        const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+        if (Math.abs(denom) < 0.0001) return false; // Parallel lines
+
+        const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+        const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
+
+        return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+    }
+
+    /**
+     * Route path around obstacles if needed
+     */
+    routeAroundObstacles(start, end, fromDir, toDir, defaultPath) {
+        // Parse the default path to get line segments
+        const segments = this.parsePathSegments(defaultPath);
+
+        // Check each segment for collisions
+        let hasCollision = false;
+        for (let i = 0; i < segments.length - 1; i++) {
+            const seg = segments[i];
+            const nextSeg = segments[i + 1];
+            if (this.doesLineIntersectShapes(seg.x, seg.y, nextSeg.x, nextSeg.y)) {
+                hasCollision = true;
+                break;
+            }
+        }
+
+        // If no collision, return default path
+        if (!hasCollision) {
+            return defaultPath;
+        }
+
+        // Try alternative routing with extended segments
+        const OFFSET = 50; // Offset distance to go around obstacles
+
+        // Try routing around by extending outward from source
+        let altPath;
+        if (fromDir === 'top' || fromDir === 'bottom') {
+            // Vertical start - try going further up/down then around
+            const offsetY = fromDir === 'top' ? -OFFSET : OFFSET;
+            altPath = `M ${start.x} ${start.y} L ${start.x} ${start.y + offsetY} L ${end.x} ${start.y + offsetY} L ${end.x} ${end.y}`;
+
+            if (!this.pathHasCollisions(altPath)) return altPath;
+
+            // Try the other side
+            const altPath2 = `M ${start.x} ${start.y} L ${start.x} ${end.y - offsetY} L ${end.x} ${end.y - offsetY} L ${end.x} ${end.y}`;
+            if (!this.pathHasCollisions(altPath2)) return altPath2;
+        } else {
+            // Horizontal start - try going further left/right then around
+            const offsetX = fromDir === 'left' ? -OFFSET : OFFSET;
+            altPath = `M ${start.x} ${start.y} L ${start.x + offsetX} ${start.y} L ${start.x + offsetX} ${end.y} L ${end.x} ${end.y}`;
+
+            if (!this.pathHasCollisions(altPath)) return altPath;
+
+            // Try the other side
+            const altPath2 = `M ${start.x} ${start.y} L ${end.x - offsetX} ${start.y} L ${end.x - offsetX} ${end.y} L ${end.x} ${end.y}`;
+            if (!this.pathHasCollisions(altPath2)) return altPath2;
+        }
+
+        // If all alternatives have collisions, return default path (user needs to rearrange shapes)
+        return defaultPath;
+    }
+
+    /**
+     * Parse SVG path string to get line segment coordinates
+     */
+    parsePathSegments(pathString) {
+        const segments = [];
+        const commands = pathString.match(/[ML]\s*[\d.-]+\s+[\d.-]+/g);
+
+        if (commands) {
+            for (let cmd of commands) {
+                const coords = cmd.match(/[\d.-]+/g);
+                if (coords && coords.length >= 2) {
+                    segments.push({
+                        x: parseFloat(coords[0]),
+                        y: parseFloat(coords[1])
+                    });
+                }
+            }
+        }
+
+        return segments;
+    }
+
+    /**
+     * Check if entire path has collisions
+     */
+    pathHasCollisions(pathString) {
+        const segments = this.parsePathSegments(pathString);
+
+        for (let i = 0; i < segments.length - 1; i++) {
+            const seg = segments[i];
+            const nextSeg = segments[i + 1];
+            if (this.doesLineIntersectShapes(seg.x, seg.y, nextSeg.x, nextSeg.y)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Create orthogonal (right-angle) path
      */
     createOrthogonalPath(start, end) {
@@ -263,32 +418,38 @@ class Connector {
         )) {
             // Use average X coordinate for perfectly straight vertical line
             const straightX = (start.x + end.x) / 2;
-            pathString = `M ${start.x} ${start.y} L ${straightX} ${start.y} L ${straightX} ${end.y} L ${end.x} ${end.y}`;
+            pathString = this.routeAroundObstacles(start, end, fromDir, toDir,
+                `M ${start.x} ${start.y} L ${straightX} ${start.y} L ${straightX} ${end.y} L ${end.x} ${end.y}`);
         } else if (isHorizontallyAligned && (
             (fromDir === 'left' && toDir === 'right') ||
             (fromDir === 'right' && toDir === 'left')
         )) {
             // Use average Y coordinate for perfectly straight horizontal line
             const straightY = (start.y + end.y) / 2;
-            pathString = `M ${start.x} ${start.y} L ${start.x} ${straightY} L ${end.x} ${straightY} L ${end.x} ${end.y}`;
+            pathString = this.routeAroundObstacles(start, end, fromDir, toDir,
+                `M ${start.x} ${start.y} L ${start.x} ${straightY} L ${end.x} ${straightY} L ${end.x} ${end.y}`);
         }
         // If connecting opposite sides (horizontal to horizontal or vertical to vertical)
         else if ((fromDir === 'left' || fromDir === 'right') && (toDir === 'left' || toDir === 'right')) {
             // Both horizontal - use midpoint
             const midX = start.x + dx / 2;
-            pathString = `M ${start.x} ${start.y} L ${midX} ${start.y} L ${midX} ${end.y} L ${end.x} ${end.y}`;
+            pathString = this.routeAroundObstacles(start, end, fromDir, toDir,
+                `M ${start.x} ${start.y} L ${midX} ${start.y} L ${midX} ${end.y} L ${end.x} ${end.y}`);
         } else if ((fromDir === 'top' || fromDir === 'bottom') && (toDir === 'top' || toDir === 'bottom')) {
             // Both vertical - use midpoint
             const midY = start.y + dy / 2;
-            pathString = `M ${start.x} ${start.y} L ${start.x} ${midY} L ${end.x} ${midY} L ${end.x} ${end.y}`;
+            pathString = this.routeAroundObstacles(start, end, fromDir, toDir,
+                `M ${start.x} ${start.y} L ${start.x} ${midY} L ${end.x} ${midY} L ${end.x} ${end.y}`);
         } else {
             // Mixed directions - go out from start direction, then to end
             if (fromDir === 'right' || fromDir === 'left') {
                 // Start horizontal, then vertical
-                pathString = `M ${start.x} ${start.y} L ${end.x} ${start.y} L ${end.x} ${end.y}`;
+                pathString = this.routeAroundObstacles(start, end, fromDir, toDir,
+                    `M ${start.x} ${start.y} L ${end.x} ${start.y} L ${end.x} ${end.y}`);
             } else {
                 // Start vertical, then horizontal
-                pathString = `M ${start.x} ${start.y} L ${start.x} ${end.y} L ${end.x} ${end.y}`;
+                pathString = this.routeAroundObstacles(start, end, fromDir, toDir,
+                    `M ${start.x} ${start.y} L ${start.x} ${end.y} L ${end.x} ${end.y}`);
             }
         }
 
@@ -394,8 +555,9 @@ class Connector {
      * Update connector (when shapes move)
      */
     update() {
-        // Recalculate best connection points based on current positions
-        this.updateConnectionPoints();
+        // DISABLED: Dynamic connection point switching
+        // Connection points now stay fixed where user placed them
+        // this.updateConnectionPoints();
 
         const pathData = this.calculatePath();
 
