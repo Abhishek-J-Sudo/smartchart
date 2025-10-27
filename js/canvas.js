@@ -125,6 +125,14 @@ function setupKeyboardShortcuts() {
  */
 function handleSelectionChange(e) {
     updatePropertiesPanel(e.selected || [e.target]);
+
+    // Highlight connector if selected
+    const selected = e.selected || [e.target];
+    selected.forEach(obj => {
+        if ((obj.isConnector || obj.isConnectorArrow) && obj.connectorObject) {
+            obj.connectorObject.highlight(true);
+        }
+    });
 }
 
 /**
@@ -132,6 +140,14 @@ function handleSelectionChange(e) {
  */
 function handleSelectionCleared() {
     clearPropertiesPanel();
+
+    // Unhighlight all connectors
+    const manager = getConnectorManager();
+    if (manager && manager.connectors) {
+        manager.connectors.forEach(connector => {
+            connector.unhighlight();
+        });
+    }
 }
 
 /**

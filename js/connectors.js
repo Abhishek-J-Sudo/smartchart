@@ -69,10 +69,19 @@ class Connector {
             selectable: true,
             hasControls: false,
             hasBorders: false,
+            lockMovementX: true,
+            lockMovementY: true,
+            lockRotation: true,
+            lockScalingX: true,
+            lockScalingY: true,
             objectCaching: false,
             perPixelTargetFind: true,
             connectorId: this.id,
-            isConnector: true
+            isConnector: true,
+            hoverCursor: 'pointer',
+            // Store original colors for hover/selection effects
+            _originalStroke: this.strokeColor,
+            _originalStrokeWidth: this.strokeWidth
         });
 
         // Create arrow head
@@ -358,13 +367,24 @@ class Connector {
             stroke: this.strokeColor,
             strokeWidth: 1,
             angle: angle,
-            selectable: false,
-            evented: false,
+            selectable: true,
+            evented: true,
+            lockMovementX: true,
+            lockMovementY: true,
+            lockRotation: true,
+            lockScalingX: true,
+            lockScalingY: true,
             objectCaching: false,
             originX: 'center',
             originY: 'center',
             connectorId: this.id,
-            isConnectorArrow: true
+            isConnectorArrow: true,
+            hasControls: false,
+            hasBorders: false,
+            hoverCursor: 'pointer',
+            // Store original colors
+            _originalFill: this.strokeColor,
+            _originalStroke: this.strokeColor
         });
 
         return arrow;
@@ -452,6 +472,49 @@ class Connector {
     }
 
     /**
+     * Highlight connector (when selected or hovered)
+     */
+    highlight(isSelection = false) {
+        if (isSelection) {
+            // Selection highlight - more prominent
+            this.path.set({
+                stroke: '#3498db',
+                strokeWidth: this.strokeWidth + 2
+            });
+            this.arrow.set({
+                fill: '#3498db',
+                stroke: '#3498db'
+            });
+        } else {
+            // Hover highlight - subtle
+            this.path.set({
+                stroke: '#3498db',
+                strokeWidth: this.strokeWidth + 1
+            });
+            this.arrow.set({
+                fill: '#3498db',
+                stroke: '#3498db'
+            });
+        }
+        canvas.requestRenderAll();
+    }
+
+    /**
+     * Remove highlight (restore original colors)
+     */
+    unhighlight() {
+        this.path.set({
+            stroke: this.path._originalStroke || this.strokeColor,
+            strokeWidth: this.path._originalStrokeWidth || this.strokeWidth
+        });
+        this.arrow.set({
+            fill: this.arrow._originalFill || this.strokeColor,
+            stroke: this.arrow._originalStroke || this.strokeColor
+        });
+        canvas.requestRenderAll();
+    }
+
+    /**
      * Bind to shape events
      */
     bindEvents() {
@@ -474,6 +537,31 @@ class Connector {
         this.toShape.on('scaling', updateHandler);
         this.toShape.on('rotating', updateHandler);
         this.toShape.on('modified', updateHandler);
+
+        // Add hover effects
+        this.path.on('mouseover', () => {
+            if (!canvas.getActiveObject() || canvas.getActiveObject() !== this.path) {
+                this.highlight(false);
+            }
+        });
+
+        this.path.on('mouseout', () => {
+            if (!canvas.getActiveObject() || canvas.getActiveObject() !== this.path) {
+                this.unhighlight();
+            }
+        });
+
+        this.arrow.on('mouseover', () => {
+            if (!canvas.getActiveObject() || (canvas.getActiveObject() !== this.path && canvas.getActiveObject() !== this.arrow)) {
+                this.highlight(false);
+            }
+        });
+
+        this.arrow.on('mouseout', () => {
+            if (!canvas.getActiveObject() || (canvas.getActiveObject() !== this.path && canvas.getActiveObject() !== this.arrow)) {
+                this.unhighlight();
+            }
+        });
     }
 
     /**
