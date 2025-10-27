@@ -374,6 +374,9 @@ class Connector {
      * Update connector (when shapes move)
      */
     update() {
+        // Recalculate best connection points based on current positions
+        this.updateConnectionPoints();
+
         const pathData = this.calculatePath();
 
         // Update path
@@ -387,6 +390,65 @@ class Connector {
             angle: pathData.endAngle
         });
         this.arrow.setCoords();
+    }
+
+    /**
+     * Update connection points based on current shape positions
+     */
+    updateConnectionPoints() {
+        // Only update if connection type is FIXED
+        if (this.connectionType !== CONNECTION_TYPE.FIXED) {
+            return;
+        }
+
+        const fromBounds = this.fromShape.getBoundingRect(true);
+        const toBounds = this.toShape.getBoundingRect(true);
+
+        const fromCenter = {
+            x: fromBounds.left + fromBounds.width / 2,
+            y: fromBounds.top + fromBounds.height / 2
+        };
+
+        const toCenter = {
+            x: toBounds.left + toBounds.width / 2,
+            y: toBounds.top + toBounds.height / 2
+        };
+
+        // Calculate best FROM connection point
+        const fromDir = this.calculateBestDirection(fromCenter, toCenter);
+        this.fromPoint = this.directionToPoint(fromDir);
+
+        // Calculate best TO connection point
+        const toDir = this.calculateBestDirection(toCenter, fromCenter);
+        this.toPoint = this.directionToPoint(toDir);
+    }
+
+    /**
+     * Calculate best direction from one center to another
+     */
+    calculateBestDirection(fromCenter, toCenter) {
+        const dx = toCenter.x - fromCenter.x;
+        const dy = toCenter.y - fromCenter.y;
+
+        // Determine which direction based on angle
+        if (Math.abs(dx) > Math.abs(dy)) {
+            return dx > 0 ? 'right' : 'left';
+        } else {
+            return dy > 0 ? 'bottom' : 'top';
+        }
+    }
+
+    /**
+     * Convert direction to normalized point
+     */
+    directionToPoint(direction) {
+        const pointMap = {
+            'top': { x: 0.5, y: 0 },
+            'right': { x: 1, y: 0.5 },
+            'bottom': { x: 0.5, y: 1 },
+            'left': { x: 0, y: 0.5 }
+        };
+        return pointMap[direction] || pointMap['right'];
     }
 
     /**
@@ -607,14 +669,13 @@ class ConnectorManager {
         const centerY = bounds.top + bounds.height / 2;
 
         // Create directional arrows (like diagrams.net)
-        const handleSize = 20;
-        const offset = 10;
+        const offset = 15; // Distance from shape edge
 
         const handles = [
             // Top arrow
             {
                 x: centerX,
-                y: bounds.top - offset - handleSize,
+                y: bounds.top - offset,
                 icon: '↑',
                 direction: 'top'
             },
@@ -634,7 +695,7 @@ class ConnectorManager {
             },
             // Left arrow
             {
-                x: bounds.left - offset - handleSize,
+                x: bounds.left - offset,
                 y: centerY,
                 icon: '←',
                 direction: 'left'
