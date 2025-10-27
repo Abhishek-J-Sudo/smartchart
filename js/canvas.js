@@ -21,6 +21,9 @@ function initCanvas() {
     // Enable grid by default
     toggleGrid();
 
+    // Initialize connector system
+    initConnectorSystem();
+
     // Set up event listeners
     setupCanvasEvents();
     setupControlButtons();
@@ -54,6 +57,10 @@ function setupCanvasEvents() {
     canvas.on('mouse:down', handleMouseDown);
     canvas.on('mouse:move', handleMouseMove);
     canvas.on('mouse:up', handleMouseUp);
+
+    // Mouse events for connection ports
+    canvas.on('mouse:over', handleMouseOver);
+    canvas.on('mouse:out', handleMouseOut);
 }
 
 /**
@@ -281,7 +288,26 @@ function handleResize() {
  * Save current canvas state
  */
 function saveCanvasState() {
-    const state = canvas.toJSON(['id', 'shapeType']);
+    // Get canvas objects (excluding connector visuals)
+    const canvasObjects = canvas.getObjects().filter(obj =>
+        !obj.isConnector && !obj.isConnectorArrow && !obj.isPort
+    );
+
+    // Save canvas state
+    const canvasState = {
+        version: canvas.version,
+        objects: canvasObjects.map(obj => obj.toJSON(['id', 'shapeType', 'text']))
+    };
+
+    // Save connectors state
+    const connectorsState = getConnectorManager().toJSON();
+
+    // Combine both states
+    const state = {
+        canvas: canvasState,
+        connectors: connectorsState
+    };
+
     stateManager.saveState(state);
 }
 
@@ -343,7 +369,22 @@ function handleDelete() {
     const activeObjects = canvas.getActiveObjects();
     if (activeObjects.length) {
         activeObjects.forEach((obj) => {
-            canvas.remove(obj);
+            // If deleting a connector line/arrow, remove the connector
+            if (obj.isConnector || obj.isConnectorArrow) {
+                const connector = obj.connectorObject;
+                if (connector) {
+                    getConnectorManager().removeConnector(connector.id);
+                }
+            }
+            // If deleting a shape, remove all its connectors
+            else if (obj.id && obj.shapeType) {
+                getConnectorManager().removeConnectorsForShape(obj);
+                canvas.remove(obj);
+            }
+            // Otherwise just remove the object
+            else {
+                canvas.remove(obj);
+            }
         });
         canvas.discardActiveObject();
         canvas.requestRenderAll();
@@ -368,10 +409,65 @@ function handleRedo() {
  * Load canvas state
  */
 function loadCanvasState(state) {
-    canvas.loadFromJSON(state, () => {
-        canvas.requestRenderAll();
-    });
+    // Handle legacy state format (before connector system)
+    if (state.objects || state.version) {
+        canvas.loadFromJSON(state, () => {
+            canvas.requestRenderAll();
+        });
+        return;
+    }
+
+    // New state format with separate canvas and connectors
+    if (state.canvas) {
+        canvas.loadFromJSON(state.canvas, () => {
+            // After canvas is loaded, restore connectors
+            if (state.connectors && state.connectors.length > 0) {
+                const shapes = canvas.getObjects();
+                getConnectorManager().fromJSON(state.connectors, shapes);
+            }
+            canvas.requestRenderAll();
+        });
+    }
 }
+
+/**
+ * Handle mouse over shape - show connection handles
+ */
+function handleMouseOver(e) {
+    const target = e.target;
+
+    // Only show handles for shapes (not text, connectors, or handles themselves)
+    if (!target || target.type === 'textbox' || target.isConnector || target.isConnectorArrow || target.isConnectionHandle) {
+        return;
+    }
+
+    // Only show if shape has an id (is a real shape)
+    if (target.id && target.shapeType) {
+        const manager = getConnectorManager();
+        manager.showConnectionHandles(target);
+    }
+}
+
+/**
+ * Handle mouse out of shape - hide connection handles
+ */
+function handleMouseOut(e) {
+    const target = e.target;
+
+    // Don't hide immediately - let user move to the handle
+    setTimeout(() => {
+        const manager = getConnectorManager();
+        const pointer = canvas.getPointer(e.e);
+        const currentTarget = canvas.findTarget(e.e, false);
+
+        // Only hide if not hovering over a handle
+        if (!currentTarget || !currentTarget.isConnectionHandle) {
+            manager.hideConnectionHandles();
+        }
+    }, 100);
+}
+
+// Old port system removed - now using diagrams.net-style connection handles
 
 // Initialize canvas when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {

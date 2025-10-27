@@ -120,14 +120,17 @@ function createTextBox(options = {}) {
  * Create an arrow/line
  */
 function createArrow(options = {}) {
+    // Make line coordinates relative (0,0 to 0,100 for vertical)
     const points = [
-        options.x1 || 100,
-        options.y1 || 100,
-        options.x2 || 180,
-        options.y2 || 180
+        0,    // x1 - relative to line's position
+        0,    // y1 - relative to line's position
+        0,    // x2 - same X = vertical
+        100   // y2 - 100px down
     ];
 
     return new fabric.Line(points, {
+        left: options.left || 100,
+        top: options.top || 100,
         stroke: options.stroke || '#2c3e50',
         strokeWidth: options.strokeWidth || 2,
         id: generateId(),

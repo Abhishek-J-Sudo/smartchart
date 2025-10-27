@@ -12,7 +12,8 @@ function initToolbar() {
         { type: SHAPE_TYPES.DIAMOND, name: 'Diamond', icon: '◆' },
         { type: SHAPE_TYPES.TRIANGLE, name: 'Triangle', icon: '▲' },
         { type: SHAPE_TYPES.ARROW, name: 'Arrow', icon: '→' },
-        { type: SHAPE_TYPES.TEXT, name: 'Text', icon: 'T' }
+        { type: SHAPE_TYPES.TEXT, name: 'Text', icon: 'T' },
+        { type: 'connector', name: 'Connector', icon: '↔', isConnector: true }
     ];
 
     shapes.forEach(shape => {
@@ -33,18 +34,77 @@ function createShapeItem(shape) {
         <span>${shape.name}</span>
     `;
 
-    // Click to add shape to canvas
+    // Click to add shape to canvas or activate connector mode
     div.addEventListener('click', () => {
-        addShapeToCanvas(shape.type);
+        if (shape.isConnector) {
+            activateConnectorMode();
+        } else {
+            addShapeToCanvas(shape.type);
+        }
     });
 
-    // Drag and drop support
-    div.draggable = true;
-    div.addEventListener('dragstart', (e) => {
-        e.dataTransfer.setData('shapeType', shape.type);
-    });
+    // Drag and drop support (not for connector tool)
+    if (!shape.isConnector) {
+        div.draggable = true;
+        div.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('shapeType', shape.type);
+        });
+    }
 
     return div;
+}
+
+/**
+ * Activate connector mode - user can hover over shapes and click connection ports
+ */
+function activateConnectorMode() {
+    // Show a notification
+    const notification = document.createElement('div');
+    notification.id = 'connector-mode-notification';
+    notification.style.cssText = `
+        position: fixed;
+        top: 60px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #3498db;
+        color: white;
+        padding: 12px 24px;
+        border-radius: 4px;
+        font-size: 14px;
+        z-index: 1000;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    `;
+    notification.textContent = 'Connector Mode Active: Hover over shapes and click connection ports to connect them';
+    document.body.appendChild(notification);
+
+    // Add escape key listener to exit connector mode
+    const escapeHandler = (e) => {
+        if (e.key === 'Escape') {
+            deactivateConnectorMode();
+            document.removeEventListener('keydown', escapeHandler);
+        }
+    };
+    document.addEventListener('keydown', escapeHandler);
+
+    // Remove notification after 4 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 4000);
+
+    console.log('Connector mode activated. Hover over shapes to see connection ports.');
+}
+
+/**
+ * Deactivate connector mode
+ */
+function deactivateConnectorMode() {
+    const notification = document.getElementById('connector-mode-notification');
+    if (notification) {
+        notification.remove();
+    }
+    console.log('Connector mode deactivated.');
 }
 
 /**

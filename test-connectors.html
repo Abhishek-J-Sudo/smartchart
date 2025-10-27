@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Dynamic Connectors</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+        }
+        #instructions {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #instructions h2 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        #instructions ol {
+            line-height: 1.8;
+        }
+        #instructions code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        canvas {
+            border: 1px solid #ddd;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="instructions">
+        <h2>Dynamic Connector Test</h2>
+        <p><strong>This demo shows the new dynamic connector system working like diagrams.net or PowerPoint!</strong></p>
+        <ol>
+            <li>Three shapes are automatically created on the canvas</li>
+            <li>Two connectors are created between them</li>
+            <li><strong>Try dragging the shapes around</strong> - the connectors will automatically follow!</li>
+            <li><strong>Try resizing the shapes</strong> - the connection points will automatically adjust!</li>
+            <li>Hover over shapes to see connection ports (blue dots)</li>
+            <li>Click a port, then click another port to create a new connector</li>
+        </ol>
+        <p><em>This is exactly how professional tools like diagrams.net and PowerPoint handle connectors - they stay attached and update dynamically!</em></p>
+    </div>
+
+    <canvas id="test-canvas"></canvas>
+
+    <!-- Include Fabric.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+
+    <!-- Include application scripts -->
+    <script src="js/utils.js"></script>
+    <script src="js/connectors.js"></script>
+
+    <script>
+        // Create canvas
+        const canvas = new fabric.Canvas('test-canvas', {
+            width: 1200,
+            height: 600,
+            backgroundColor: '#ffffff',
+            selection: true
+        });
+
+        // Initialize connector system
+        const connectorManager = initConnectorSystem();
+
+        // Create test shapes
+        const rect1 = new fabric.Rect({
+            left: 100,
+            top: 200,
+            width: 120,
+            height: 80,
+            fill: '#3498db',
+            stroke: '#2c3e50',
+            strokeWidth: 2,
+            id: 'shape1'
+        });
+
+        const circle = new fabric.Circle({
+            left: 400,
+            top: 150,
+            radius: 60,
+            fill: '#2ecc71',
+            stroke: '#2c3e50',
+            strokeWidth: 2,
+            id: 'shape2'
+        });
+
+        const rect2 = new fabric.Rect({
+            left: 700,
+            top: 250,
+            width: 100,
+            height: 100,
+            fill: '#e74c3c',
+            stroke: '#2c3e50',
+            strokeWidth: 2,
+            id: 'shape3'
+        });
+
+        // Add shapes to canvas
+        canvas.add(rect1);
+        canvas.add(circle);
+        canvas.add(rect2);
+
+        // Create dynamic connectors
+        connectorManager.createConnector(rect1, circle, 'auto', 'auto');
+        connectorManager.createConnector(circle, rect2, 'auto', 'auto');
+
+        canvas.requestRenderAll();
+
+        // Show connection ports on hover
+        let currentPorts = [];
+
+        canvas.on('mouse:over', (e) => {
+            const target = e.target;
+            if (!target || target.isPort || target.isConnector || target.isConnectorArrow) {
+                return;
+            }
+
+            // Clear existing ports
+            currentPorts.forEach(port => canvas.remove(port));
+            currentPorts = [];
+
+            // Show ports
+            const bounds = target.getBoundingRect(true);
+            const centerX = bounds.left + bounds.width / 2;
+            const centerY = bounds.top + bounds.height / 2;
+
+            const portPositions = [
+                { x: centerX, y: bounds.top, position: 'top' },
+                { x: bounds.left + bounds.width, y: centerY, position: 'right' },
+                { x: centerX, y: bounds.top + bounds.height, position: 'bottom' },
+                { x: bounds.left, y: centerY, position: 'left' }
+            ];
+
+            portPositions.forEach(portData => {
+                const port = new fabric.Circle({
+                    left: portData.x,
+                    top: portData.y,
+                    radius: 6,
+                    fill: '#3498db',
+                    stroke: '#2c3e50',
+                    strokeWidth: 2,
+                    originX: 'center',
+                    originY: 'center',
+                    selectable: false,
+                    evented: true,
+                    isPort: true,
+                    parentShape: target,
+                    portPosition: portData.position,
+                    hoverCursor: 'pointer'
+                });
+
+                canvas.add(port);
+                currentPorts.push(port);
+            });
+
+            canvas.requestRenderAll();
+        });
+
+        // Hide ports when mouse leaves canvas area
+        canvas.on('mouse:out', (e) => {
+            if (!e.target || (!e.target.isPort && e.target.type !== 'circle' && e.target.type !== 'rect')) {
+                setTimeout(() => {
+                    currentPorts.forEach(port => canvas.remove(port));
+                    currentPorts = [];
+                    canvas.requestRenderAll();
+                }, 100);
+            }
+        });
+
+        console.log('Test ready! Try dragging the shapes around.');
+        console.log('Connectors:', connectorManager.connectors);
+    </script>
+</body>
+</html>

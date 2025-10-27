@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connectors v2 - Like diagrams.net</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+        }
+        #instructions {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #instructions h2 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        #instructions ol {
+            line-height: 1.8;
+        }
+        #instructions strong {
+            color: #2ecc71;
+        }
+        .feature {
+            background: #e8f5e9;
+            padding: 10px;
+            margin: 10px 0;
+            border-left: 4px solid #2ecc71;
+        }
+        canvas {
+            border: 1px solid #ddd;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        #controls {
+            background: white;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #controls button {
+            padding: 10px 20px;
+            margin-right: 10px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        #controls button:hover {
+            background: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <div id="instructions">
+        <h2>✨ NEW: Connectors Like diagrams.net!</h2>
+        <p><strong>This is a complete rewrite matching professional diagram tools</strong></p>
+
+        <div class="feature">
+            <strong>🎯 Floating Connectors (DEFAULT)</strong><br>
+            Automatically find the shortest path to shape perimeter - just like diagrams.net!
+        </div>
+
+        <div class="feature">
+            <strong>🔧 Orthogonal Routing</strong><br>
+            Right-angle paths for professional flowcharts
+        </div>
+
+        <div class="feature">
+            <strong>↔️ Directional Arrows (Not Tiny Dots!)</strong><br>
+            Hover over shapes to see arrow handles - click and drag to connect
+        </div>
+
+        <div class="feature">
+            <strong>🎨 Multiple Routing Styles</strong><br>
+            Switch between Straight, Orthogonal (right-angle), and Curved paths
+        </div>
+
+        <ol>
+            <li><strong>Hover over any shape</strong> - You'll see directional arrows (↑ → ↓ ←)</li>
+            <li><strong>Click and drag an arrow</strong> - A dashed line follows your mouse</li>
+            <li><strong>Release over another shape</strong> - Connector is created!</li>
+            <li><strong>Drag shapes around</strong> - Connectors automatically update and stay attached</li>
+            <li><strong>Resize shapes</strong> - Connection points recalculate automatically</li>
+        </ol>
+    </div>
+
+    <div id="controls">
+        <button onclick="changeRouting('orthogonal')">Orthogonal Routing (Right Angles)</button>
+        <button onclick="changeRouting('straight')">Straight Lines</button>
+        <button onclick="changeRouting('curved')">Curved Paths</button>
+        <button onclick="addShape()">Add Rectangle</button>
+        <button onclick="clearAll()">Clear All</button>
+    </div>
+
+    <canvas id="test-canvas"></canvas>
+
+    <!-- Include Fabric.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+
+    <!-- Include application scripts -->
+    <script src="js/utils.js"></script>
+    <script src="js/connectors.js"></script>
+
+    <script>
+        // Create canvas
+        const canvas = new fabric.Canvas('test-canvas', {
+            width: 1400,
+            height: 700,
+            backgroundColor: '#ffffff',
+            selection: true
+        });
+
+        // Initialize connector system
+        const connectorManager = initConnectorSystem();
+
+        // Create test shapes
+        const shapes = [];
+
+        function createTestShape(left, top, color, label) {
+            const rect = new fabric.Rect({
+                left: left,
+                top: top,
+                width: 120,
+                height: 80,
+                fill: color,
+                stroke: '#2c3e50',
+                strokeWidth: 2,
+                id: generateId(),
+                shapeType: 'rectangle'
+            });
+
+            // Add label
+            const text = new fabric.Text(label, {
+                left: left + 60,
+                top: top + 40,
+                fontSize: 14,
+                fill: 'white',
+                originX: 'center',
+                originY: 'center',
+                selectable: false,
+                evented: false
+            });
+
+            canvas.add(rect);
+            canvas.add(text);
+            shapes.push({ shape: rect, text: text });
+
+            // Update text position when shape moves
+            rect.on('moving', function() {
+                text.set({
+                    left: this.left + 60,
+                    top: this.top + 40
+                });
+            });
+
+            rect.on('scaling', function() {
+                const bounds = this.getBoundingRect();
+                text.set({
+                    left: bounds.left + bounds.width / 2,
+                    top: bounds.top + bounds.height / 2
+                });
+            });
+
+            return rect;
+        }
+
+        const shape1 = createTestShape(150, 150, '#3498db', 'Start');
+        const shape2 = createTestShape(450, 100, '#2ecc71', 'Process');
+        const shape3 = createTestShape(750, 150, '#e74c3c', 'Decision');
+        const shape4 = createTestShape(1050, 200, '#f39c12', 'End');
+
+        // Create connectors with FLOATING mode and ORTHOGONAL routing (default)
+        const connector1 = connectorManager.createConnector(shape1, shape2);
+        const connector2 = connectorManager.createConnector(shape2, shape3);
+        const connector3 = connectorManager.createConnector(shape3, shape4);
+
+        canvas.requestRenderAll();
+
+        // Show connection handles on hover
+        canvas.on('mouse:over', (e) => {
+            const target = e.target;
+            if (!target || target.isConnectionHandle || target.isConnector || target.isConnectorArrow || target.type === 'text') {
+                return;
+            }
+
+            if (target.id && target.shapeType) {
+                connectorManager.showConnectionHandles(target);
+            }
+        });
+
+        canvas.on('mouse:out', (e) => {
+            setTimeout(() => {
+                const pointer = canvas.getPointer(e.e);
+                const currentTarget = canvas.findTarget(e.e, false);
+
+                if (!currentTarget || !currentTarget.isConnectionHandle) {
+                    connectorManager.hideConnectionHandles();
+                }
+            }, 100);
+        });
+
+        // Control functions
+        function changeRouting(style) {
+            connectorManager.connectors.forEach(connector => {
+                connector.routingStyle = style;
+                connector.update();
+            });
+            canvas.requestRenderAll();
+            console.log('Changed routing to:', style);
+        }
+
+        function addShape() {
+            const x = Math.random() * 1000 + 100;
+            const y = Math.random() * 400 + 100;
+            const colors = ['#3498db', '#2ecc71', '#e74c3c', '#f39c12', '#9b59b6'];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            createTestShape(x, y, color, 'New');
+        }
+
+        function clearAll() {
+            connectorManager.clearAll();
+            shapes.forEach(item => {
+                canvas.remove(item.shape);
+                canvas.remove(item.text);
+            });
+            shapes.length = 0;
+            canvas.requestRenderAll();
+        }
+
+        console.log('🎉 Connectors v2 ready!');
+        console.log('Hover over shapes to see directional arrow handles');
+        console.log('Drag from arrows to create floating connectors');
+        console.log('Features: Floating connectors, Orthogonal routing, Auto-perimeter attachment');
+    </script>
+</body>
+</html>
