@@ -24,8 +24,8 @@ class Connector {
         this.fromShape = fromShape;
         this.toShape = toShape;
 
-        // Connection settings
-        this.connectionType = options.connectionType || CONNECTION_TYPE.FLOATING;
+        // Connection settings - ALWAYS use FIXED connection points
+        this.connectionType = CONNECTION_TYPE.FIXED;
         this.routingStyle = options.routingStyle || ROUTING_STYLE.ORTHOGONAL;
 
         // Fixed connection points (only used if connectionType is FIXED)
@@ -54,6 +54,12 @@ class Connector {
      */
     createVisuals() {
         const pathData = this.calculatePath();
+
+        console.log('Creating connector:', {
+            fromPoint: this.fromPoint,
+            toPoint: this.toPoint,
+            pathData: pathData
+        });
 
         // Create path
         this.path = new fabric.Path(pathData.pathString, {
@@ -230,32 +236,66 @@ class Connector {
         const dx = end.x - start.x;
         const dy = end.y - start.y;
 
-        // Simple orthogonal routing - two segments
-        const midX = start.x + dx / 2;
+        // Determine connection directions based on fromPoint and toPoint
+        const fromDir = this.getDirectionFromPoint(this.fromPoint);
+        const toDir = this.getDirectionFromPoint(this.toPoint);
 
         let pathString;
-        if (Math.abs(dx) > Math.abs(dy)) {
-            // Horizontal first, then vertical
+        const gap = 20; // Minimum gap from shape
+
+        // If connecting opposite sides (horizontal to horizontal or vertical to vertical)
+        if ((fromDir === 'left' || fromDir === 'right') && (toDir === 'left' || toDir === 'right')) {
+            // Both horizontal - use midpoint
+            const midX = start.x + dx / 2;
             pathString = `M ${start.x} ${start.y} L ${midX} ${start.y} L ${midX} ${end.y} L ${end.x} ${end.y}`;
-        } else {
-            // Vertical first, then horizontal
+        } else if ((fromDir === 'top' || fromDir === 'bottom') && (toDir === 'top' || toDir === 'bottom')) {
+            // Both vertical - use midpoint
             const midY = start.y + dy / 2;
             pathString = `M ${start.x} ${start.y} L ${start.x} ${midY} L ${end.x} ${midY} L ${end.x} ${end.y}`;
+        } else {
+            // Mixed directions - go out from start direction, then to end
+            if (fromDir === 'right' || fromDir === 'left') {
+                // Start horizontal, then vertical
+                pathString = `M ${start.x} ${start.y} L ${end.x} ${start.y} L ${end.x} ${end.y}`;
+            } else {
+                // Start vertical, then horizontal
+                pathString = `M ${start.x} ${start.y} L ${start.x} ${end.y} L ${end.x} ${end.y}`;
+            }
         }
 
-        // Calculate angle at end point
-        const segments = pathString.split(' ');
-        const lastSegment = segments[segments.length - 2];
-        const secondLast = segments[segments.length - 4];
-
+        // Calculate angle for arrow based on the incoming direction (toDir)
+        // Arrow should point INTO the shape
         let angle = 0;
-        if (lastSegment === 'L') {
-            const lastX = parseFloat(segments[segments.length - 3]);
-            const lastY = parseFloat(segments[segments.length - 1]);
-            angle = Math.atan2(end.y - lastY, end.x - lastX) * 180 / Math.PI;
+        switch (toDir) {
+            case 'top':
+                angle = 90; // Arrow pointing DOWN into top of shape
+                break;
+            case 'right':
+                angle = 180; // Arrow pointing LEFT into right side of shape
+                break;
+            case 'bottom':
+                angle = -90; // Arrow pointing UP into bottom of shape
+                break;
+            case 'left':
+                angle = 0; // Arrow pointing RIGHT into left side of shape
+                break;
         }
 
         return { pathString, endAngle: angle };
+    }
+
+    /**
+     * Get direction from normalized point coordinates
+     */
+    getDirectionFromPoint(point) {
+        if (!point) return 'right';
+
+        if (point.y === 0) return 'top';
+        if (point.y === 1) return 'bottom';
+        if (point.x === 0) return 'left';
+        if (point.x === 1) return 'right';
+
+        return 'right';
     }
 
     /**
@@ -283,6 +323,8 @@ class Connector {
      * Create arrow head
      */
     createArrowHead(point, angle) {
+        console.log('Creating arrow at', point, 'with angle', angle);
+
         const arrowPoints = [
             { x: 0, y: 0 },
             { x: -this.arrowSize, y: -this.arrowSize / 2 },
@@ -401,11 +443,86 @@ class ConnectorManager {
     }
 
     /**
+     * Get fixed connection point from direction (top/right/bottom/left)
+     */
+    getFixedPointFromDirection(direction, shape, otherShape) {
+        // Map of directions to normalized coordinates (0-1)
+        const pointMap = {
+            'top': { x: 0.5, y: 0 },      // Center-top
+            'right': { x: 1, y: 0.5 },    // Center-right
+            'bottom': { x: 0.5, y: 1 },   // Center-bottom
+            'left': { x: 0, y: 0.5 }      // Center-left
+        };
+
+        // If auto, determine best direction based on which side is nearest
+        if (direction === 'auto') {
+            const shapeBounds = shape.getBoundingRect(true);
+            const otherBounds = otherShape.getBoundingRect(true);
+
+            // Get all 4 connection points on this shape
+            const connectionPoints = {
+                top: {
+                    x: shapeBounds.left + shapeBounds.width * 0.5,
+                    y: shapeBounds.top
+                },
+                right: {
+                    x: shapeBounds.left + shapeBounds.width,
+                    y: shapeBounds.top + shapeBounds.height * 0.5
+                },
+                bottom: {
+                    x: shapeBounds.left + shapeBounds.width * 0.5,
+                    y: shapeBounds.top + shapeBounds.height
+                },
+                left: {
+                    x: shapeBounds.left,
+                    y: shapeBounds.top + shapeBounds.height * 0.5
+                }
+            };
+
+            // Get center of other shape
+            const otherCenter = {
+                x: otherBounds.left + otherBounds.width / 2,
+                y: otherBounds.top + otherBounds.height / 2
+            };
+
+            // Find which connection point is closest to other shape's center
+            let minDistance = Infinity;
+            let bestDirection = 'right';
+
+            for (let dir in connectionPoints) {
+                const point = connectionPoints[dir];
+                const distance = Math.sqrt(
+                    Math.pow(point.x - otherCenter.x, 2) +
+                    Math.pow(point.y - otherCenter.y, 2)
+                );
+
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    bestDirection = dir;
+                }
+            }
+
+            direction = bestDirection;
+            console.log('Auto-selected direction for', shape.id, ':', direction);
+        }
+
+        return pointMap[direction] || pointMap['right'];
+    }
+
+    /**
      * Create connector
      */
     createConnector(fromShape, toShape, options = {}) {
         if (!fromShape || !toShape || fromShape === toShape) {
             return null;
+        }
+
+        // Ensure we have fixed connection points defined
+        if (!options.fromPoint) {
+            options.fromPoint = this.getFixedPointFromDirection(options.fromDirection || 'auto', fromShape, toShape);
+        }
+        if (!options.toPoint) {
+            options.toPoint = this.getFixedPointFromDirection(options.toDirection || 'auto', toShape, fromShape);
         }
 
         const connector = new Connector(fromShape, toShape, options);
@@ -546,10 +663,60 @@ class ConnectorManager {
     }
 
     /**
+     * Find nearest connection point to mouse pointer
+     */
+    findNearestConnectionPoint(pointer, shape) {
+        const bounds = shape.getBoundingRect(true);
+
+        const connectionPoints = {
+            top: {
+                x: bounds.left + bounds.width / 2,
+                y: bounds.top
+            },
+            right: {
+                x: bounds.left + bounds.width,
+                y: bounds.top + bounds.height / 2
+            },
+            bottom: {
+                x: bounds.left + bounds.width / 2,
+                y: bounds.top + bounds.height
+            },
+            left: {
+                x: bounds.left,
+                y: bounds.top + bounds.height / 2
+            }
+        };
+
+        let minDistance = Infinity;
+        let nearestDirection = 'top';
+
+        for (let dir in connectionPoints) {
+            const point = connectionPoints[dir];
+            const distance = Math.sqrt(
+                Math.pow(pointer.x - point.x, 2) +
+                Math.pow(pointer.y - point.y, 2)
+            );
+
+            if (distance < minDistance) {
+                minDistance = distance;
+                nearestDirection = dir;
+            }
+        }
+
+        return nearestDirection;
+    }
+
+    /**
      * Start connector drag
      */
     startConnectorDrag(fromShape, handle, event) {
         console.log('Starting connector drag from', fromShape.id);
+
+        // Prevent shape selection during connector drag
+        event.e.preventDefault();
+        event.e.stopPropagation();
+        canvas.selection = false;
+        canvas.discardActiveObject();
 
         // Create temporary line to show during drag
         const startPos = handle.getCenterPoint();
@@ -569,6 +736,13 @@ class ConnectorManager {
         const moveHandler = (e) => {
             const pointer = canvas.getPointer(e.e);
             tempLine.set({ x2: pointer.x, y2: pointer.y });
+
+            // Show connection handles on shape being hovered over
+            const target = canvas.findTarget(e.e, false);
+            if (target && target.id && target !== fromShape && !target.isConnectionHandle) {
+                this.showConnectionHandles(target);
+            }
+
             canvas.requestRenderAll();
         };
 
@@ -577,16 +751,50 @@ class ConnectorManager {
             canvas.off('mouse:move', moveHandler);
             canvas.off('mouse:up', upHandler);
 
-            // Check if released over a shape
+            // Re-enable selection
+            canvas.selection = true;
+
+            // Check what was released on
             const pointer = canvas.getPointer(e.e);
             const target = canvas.findTarget(e.e, false);
 
-            if (target && target.id && target !== fromShape && !target.isConnectionHandle) {
-                // Create connector
-                this.createConnector(fromShape, target);
-                this.hideConnectionHandles();
+            let toDirection = 'auto';
+            let toShape = null;
+
+            // Check if released on a connection handle
+            if (target && target.isConnectionHandle) {
+                toShape = target.parentShape;
+                toDirection = target.direction;
+                console.log('Released on connection handle:', toDirection);
+            }
+            // Check if released on a shape directly
+            else if (target && target.id && target !== fromShape) {
+                toShape = target;
+                // Find nearest connection handle
+                toDirection = this.findNearestConnectionPoint(pointer, toShape);
+                console.log('Released on shape, nearest point:', toDirection);
             }
 
+            if (toShape) {
+                console.log('Creating connector:', {
+                    from: fromShape.id,
+                    to: toShape.id,
+                    fromDirection: handle.direction,
+                    toDirection: toDirection
+                });
+
+                // Create connector with explicit directions
+                const connector = this.createConnector(fromShape, toShape, {
+                    fromDirection: handle.direction,
+                    toDirection: toDirection
+                });
+
+                console.log('Connector created:', connector);
+            } else {
+                console.log('No valid target found');
+            }
+
+            this.hideConnectionHandles();
             canvas.requestRenderAll();
         };
 
