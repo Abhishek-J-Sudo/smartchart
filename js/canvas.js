@@ -108,10 +108,14 @@ function setupKeyboardShortcuts() {
             e.preventDefault();
             handleSelectAll();
         }
-        // Delete or Backspace - Delete selected
+        // Delete or Backspace - Delete selected (but not when editing text)
         else if (e.key === 'Delete' || e.key === 'Backspace') {
-            e.preventDefault();
-            handleDelete();
+            // Don't delete shapes if user is editing text
+            const activeObject = canvas.getActiveObject();
+            if (!activeObject || activeObject.type !== 'i-text' || !activeObject.isEditing) {
+                e.preventDefault();
+                handleDelete();
+            }
         }
     });
 }
@@ -157,25 +161,156 @@ function handleObjectRemoved(e) {
 function handleDoubleClick(opt) {
     const target = opt.target;
 
-    // Ignore if clicked on textbox (standalone text)
-    if (!target || target.type === 'textbox' || target.type === 'i-text') {
+    // If double-clicked on a shape's text object, enter edit mode
+    if (target && target.type === 'i-text' && target._isShapeText) {
+        target.enterEditing();
+        target.selectAll();
         return;
     }
 
-    // Check if shape already has text
-    const existingText = target.text;
-
-    // Prompt for text input
-    const userText = prompt('Enter text for this shape:', existingText || '');
-
-    if (userText !== null) {
-        // Add text property to the shape
-        target.set('text', userText);
-
-        // Force re-render with text
-        canvas.requestRenderAll();
-        saveCanvasState();
+    // If double-clicked on a standalone textbox, ignore (let default behavior handle it)
+    if (!target || target.type === 'textbox' || (target.type === 'i-text' && !target._isShapeText)) {
+        return;
     }
+
+    // Ignore connectors and connection handles
+    if (target.isConnector || target.isConnectorArrow || target.isConnectionHandle) {
+        return;
+    }
+
+    // Only allow text editing for shapes
+    if (!target.id || !target.shapeType) {
+        return;
+    }
+
+    // Check if shape already has a text object
+    if (target._textObject) {
+        // Text object already exists, just enter edit mode
+        const itext = target._textObject;
+        itext.enterEditing();
+        itext.selectAll();
+        canvas.setActiveObject(itext);
+
+        // Add exit editing handler
+        const exitEditingHandler = (e) => {
+            if (itext.isEditing && e.target !== itext) {
+                itext.exitEditing();
+                canvas.off('mouse:down', exitEditingHandler);
+            }
+        };
+
+        setTimeout(() => {
+            canvas.on('mouse:down', exitEditingHandler);
+        }, 100);
+    } else {
+        // Create new text object for this shape
+        createShapeTextObject(target);
+    }
+}
+
+/**
+ * Create a persistent text object for a shape
+ */
+function createShapeTextObject(shape) {
+    // Calculate position for text (centered on shape)
+    const shapeCenter = shape.getCenterPoint();
+
+    // Determine width based on shape type
+    let textWidth;
+    if (shape.type === 'circle') {
+        textWidth = (shape.radius * 2 * shape.scaleX) * 0.7; // 70% of diameter
+    } else if (shape.width) {
+        textWidth = (shape.width * shape.scaleX) * 0.8; // 80% of shape width
+    } else {
+        textWidth = 100; // Default width
+    }
+
+    // Get existing text if any (for backward compatibility with old saved files)
+    const existingText = shape.text || '';
+
+    // Create IText object
+    const itext = new fabric.IText(existingText, {
+        left: shapeCenter.x,
+        top: shapeCenter.y,
+        fontSize: 14,
+        fontFamily: 'Arial',
+        fill: '#ffffff',
+        stroke: '',
+        strokeWidth: 0,
+        textAlign: 'center',
+        originX: 'center',
+        originY: 'center',
+        width: textWidth,
+        splitByGrapheme: true,
+        editable: true,
+        selectable: false, // Don't select separately from shape
+        _isShapeText: true, // Flag to identify as shape text
+        _parentShape: shape, // Reference to parent shape
+        lockMovementX: true, // Prevent independent movement
+        lockMovementY: true,
+        hasControls: false, // No resize handles
+        hasBorders: false, // No selection borders
+        evented: true // Allow double-click events
+    });
+
+    // Store reference in both directions
+    shape._textObject = itext;
+
+    // Add to canvas
+    canvas.add(itext);
+
+    // Enter editing mode immediately
+    canvas.setActiveObject(itext);
+    itext.enterEditing();
+    itext.selectAll();
+
+    // Update text object position when shape moves
+    shape.on('moving', () => {
+        const center = shape.getCenterPoint();
+        itext.set({
+            left: center.x,
+            top: center.y
+        });
+        itext.setCoords();
+    });
+
+    // Update text object when shape is modified (scaled, rotated, etc)
+    shape.on('modified', () => {
+        const center = shape.getCenterPoint();
+
+        // Update text width based on new shape size
+        if (shape.type === 'circle') {
+            itext.set('width', (shape.radius * 2 * shape.scaleX) * 0.7);
+        } else if (shape.width) {
+            itext.set('width', (shape.width * shape.scaleX) * 0.8);
+        }
+
+        itext.set({
+            left: center.x,
+            top: center.y
+        });
+        itext.setCoords();
+    });
+
+    // When text is edited, update shape's text property for backward compatibility
+    itext.on('changed', () => {
+        shape.set('text', itext.text);
+    });
+
+    // Exit editing mode when clicking outside
+    const exitEditingHandler = (e) => {
+        if (itext.isEditing && e.target !== itext) {
+            itext.exitEditing();
+            canvas.off('mouse:down', exitEditingHandler);
+        }
+    };
+
+    // Add listener after a short delay to prevent immediate trigger
+    setTimeout(() => {
+        canvas.on('mouse:down', exitEditingHandler);
+    }, 100);
+
+    canvas.requestRenderAll();
 }
 
 /**
@@ -288,9 +423,9 @@ function handleResize() {
  * Save current canvas state
  */
 function saveCanvasState() {
-    // Get canvas objects (excluding connector visuals)
+    // Get canvas objects (excluding connector visuals, text editing objects, and shape text)
     const canvasObjects = canvas.getObjects().filter(obj =>
-        !obj.isConnector && !obj.isConnectorArrow && !obj.isPort
+        !obj.isConnector && !obj.isConnectorArrow && !obj.isPort && !obj._isEditingText && !obj._isShapeText
     );
 
     // Save canvas state
@@ -376,9 +511,13 @@ function handleDelete() {
                     getConnectorManager().removeConnector(connector.id);
                 }
             }
-            // If deleting a shape, remove all its connectors
+            // If deleting a shape, remove all its connectors and text
             else if (obj.id && obj.shapeType) {
                 getConnectorManager().removeConnectorsForShape(obj);
+                // Also remove associated text object if it exists
+                if (obj._textObject) {
+                    canvas.remove(obj._textObject);
+                }
                 canvas.remove(obj);
             }
             // Otherwise just remove the object
@@ -420,11 +559,77 @@ function loadCanvasState(state) {
     // New state format with separate canvas and connectors
     if (state.canvas) {
         canvas.loadFromJSON(state.canvas, () => {
-            // After canvas is loaded, restore connectors
+            // After canvas is loaded, restore text objects for shapes that have text
+            const shapes = canvas.getObjects().filter(obj => obj.id && obj.shapeType);
+            shapes.forEach(shape => {
+                if (shape.text) {
+                    // Recreate text object for shapes that have text (don't enter edit mode)
+                    const shapeCenter = shape.getCenterPoint();
+                    let textWidth;
+                    if (shape.type === 'circle') {
+                        textWidth = (shape.radius * 2 * shape.scaleX) * 0.7;
+                    } else if (shape.width) {
+                        textWidth = (shape.width * shape.scaleX) * 0.8;
+                    } else {
+                        textWidth = 100;
+                    }
+
+                    const itext = new fabric.IText(shape.text, {
+                        left: shapeCenter.x,
+                        top: shapeCenter.y,
+                        fontSize: 14,
+                        fontFamily: 'Arial',
+                        fill: '#ffffff',
+                        stroke: '',
+                        strokeWidth: 0,
+                        textAlign: 'center',
+                        originX: 'center',
+                        originY: 'center',
+                        width: textWidth,
+                        splitByGrapheme: true,
+                        editable: true,
+                        selectable: false,
+                        _isShapeText: true,
+                        _parentShape: shape,
+                        lockMovementX: true,
+                        lockMovementY: true,
+                        hasControls: false,
+                        hasBorders: false,
+                        evented: true
+                    });
+
+                    shape._textObject = itext;
+                    canvas.add(itext);
+
+                    // Bind events for this text object
+                    shape.on('moving', () => {
+                        const center = shape.getCenterPoint();
+                        itext.set({ left: center.x, top: center.y });
+                        itext.setCoords();
+                    });
+
+                    shape.on('modified', () => {
+                        const center = shape.getCenterPoint();
+                        if (shape.type === 'circle') {
+                            itext.set('width', (shape.radius * 2 * shape.scaleX) * 0.7);
+                        } else if (shape.width) {
+                            itext.set('width', (shape.width * shape.scaleX) * 0.8);
+                        }
+                        itext.set({ left: center.x, top: center.y });
+                        itext.setCoords();
+                    });
+
+                    itext.on('changed', () => {
+                        shape.set('text', itext.text);
+                    });
+                }
+            });
+
+            // Restore connectors
             if (state.connectors && state.connectors.length > 0) {
-                const shapes = canvas.getObjects();
                 getConnectorManager().fromJSON(state.connectors, shapes);
             }
+
             canvas.requestRenderAll();
         });
     }

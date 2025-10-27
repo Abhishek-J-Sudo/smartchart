@@ -27,8 +27,7 @@ function createRectangle(options = {}) {
         shapeType: SHAPE_TYPES.RECTANGLE
     });
 
-    // Add text rendering
-    addTextToShape(rect);
+    // Text is now handled by persistent IText objects (see canvas.js)
     return rect;
 }
 
@@ -47,7 +46,7 @@ function createCircle(options = {}) {
         shapeType: SHAPE_TYPES.CIRCLE
     });
 
-    addTextToShape(circle);
+    // Text is now handled by persistent IText objects (see canvas.js)
     return circle;
 }
 
@@ -75,7 +74,7 @@ function createDiamond(options = {}) {
         shapeType: SHAPE_TYPES.DIAMOND
     });
 
-    addTextToShape(diamond);
+    // Text is now handled by persistent IText objects (see canvas.js)
     return diamond;
 }
 
@@ -95,7 +94,7 @@ function createTriangle(options = {}) {
         shapeType: SHAPE_TYPES.TRIANGLE
     });
 
-    addTextToShape(triangle);
+    // Text is now handled by persistent IText objects (see canvas.js)
     return triangle;
 }
 
@@ -169,60 +168,11 @@ function cloneShape(shape, callback) {
 }
 
 /**
- * Add text rendering capability to a shape
+ * DEPRECATED: Old text rendering system
+ * Text is now handled by persistent IText objects in canvas.js
+ * This function is kept for backward compatibility with old saved files
  */
 function addTextToShape(shape) {
-    const originalRender = shape._render;
-
-    shape._render = function(ctx) {
-        originalRender.call(this, ctx);
-
-        // Render text if exists
-        if (this.text) {
-            ctx.save();
-
-            // Set text properties
-            const fontSize = 14;
-            ctx.font = `${fontSize}px Arial`;
-            ctx.fillStyle = '#ffffff';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-
-            // Add text stroke for better visibility
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 0.5;
-
-            // Word wrap the text
-            const maxWidth = this.width || (this.radius * 2) || 100;
-            const words = this.text.split(' ');
-            const lines = [];
-            let currentLine = '';
-
-            words.forEach(word => {
-                const testLine = currentLine ? `${currentLine} ${word}` : word;
-                const metrics = ctx.measureText(testLine);
-
-                if (metrics.width > maxWidth - 10) {
-                    if (currentLine) lines.push(currentLine);
-                    currentLine = word;
-                } else {
-                    currentLine = testLine;
-                }
-            });
-            if (currentLine) lines.push(currentLine);
-
-            // Draw each line
-            const lineHeight = fontSize + 4;
-            const totalHeight = lines.length * lineHeight;
-            const startY = -(totalHeight / 2) + (lineHeight / 2);
-
-            lines.forEach((line, index) => {
-                const y = startY + (index * lineHeight);
-                ctx.strokeText(line, 0, y);
-                ctx.fillText(line, 0, y);
-            });
-
-            ctx.restore();
-        }
-    };
+    // No longer used - text is now handled by IText objects
+    // Kept for backward compatibility
 }
