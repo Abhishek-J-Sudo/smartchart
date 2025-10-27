@@ -40,7 +40,9 @@ function createShapeItem(shape) {
     // Drag and drop support
     div.draggable = true;
     div.addEventListener('dragstart', (e) => {
+        e.dataTransfer.effectAllowed = 'copy';
         e.dataTransfer.setData('shapeType', shape.type);
+        e.dataTransfer.setData('text/plain', shape.type); // Fallback
     });
 
     return div;
@@ -80,8 +82,13 @@ function setupCanvasDragDrop() {
     canvasContainer.addEventListener('drop', (e) => {
         e.preventDefault();
 
-        const shapeType = e.dataTransfer.getData('shapeType');
-        if (!shapeType) return;
+        let shapeType = e.dataTransfer.getData('shapeType');
+        if (!shapeType) {
+            // Try fallback
+            shapeType = e.dataTransfer.getData('text/plain');
+        }
+
+        if (!shapeType || !canvas) return;
 
         // Calculate canvas position accounting for zoom and pan
         const pointer = canvas.getPointer(e);
