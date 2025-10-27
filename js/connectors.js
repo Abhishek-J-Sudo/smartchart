@@ -241,10 +241,30 @@ class Connector {
         const toDir = this.getDirectionFromPoint(this.toPoint);
 
         let pathString;
-        const gap = 20; // Minimum gap from shape
 
+        // Check if shapes are reasonably aligned - use straight line with tolerance
+        const alignmentTolerance = 30; // pixels
+        const isVerticallyAligned = Math.abs(dx) < alignmentTolerance;
+        const isHorizontallyAligned = Math.abs(dy) < alignmentTolerance;
+
+        // If reasonably aligned vertically, straighten to use same X coordinate
+        if (isVerticallyAligned && (
+            (fromDir === 'top' && toDir === 'bottom') ||
+            (fromDir === 'bottom' && toDir === 'top')
+        )) {
+            // Use average X coordinate for perfectly straight vertical line
+            const straightX = (start.x + end.x) / 2;
+            pathString = `M ${start.x} ${start.y} L ${straightX} ${start.y} L ${straightX} ${end.y} L ${end.x} ${end.y}`;
+        } else if (isHorizontallyAligned && (
+            (fromDir === 'left' && toDir === 'right') ||
+            (fromDir === 'right' && toDir === 'left')
+        )) {
+            // Use average Y coordinate for perfectly straight horizontal line
+            const straightY = (start.y + end.y) / 2;
+            pathString = `M ${start.x} ${start.y} L ${start.x} ${straightY} L ${end.x} ${straightY} L ${end.x} ${end.y}`;
+        }
         // If connecting opposite sides (horizontal to horizontal or vertical to vertical)
-        if ((fromDir === 'left' || fromDir === 'right') && (toDir === 'left' || toDir === 'right')) {
+        else if ((fromDir === 'left' || fromDir === 'right') && (toDir === 'left' || toDir === 'right')) {
             // Both horizontal - use midpoint
             const midX = start.x + dx / 2;
             pathString = `M ${start.x} ${start.y} L ${midX} ${start.y} L ${midX} ${end.y} L ${end.x} ${end.y}`;
@@ -663,6 +683,62 @@ class ConnectorManager {
     }
 
     /**
+     * Snap shapes to alignment if within tolerance
+     */
+    snapShapesToAlign(fromShape, toShape, fromDirection, toDirection) {
+        const alignmentTolerance = 30; // pixels
+
+        const fromBounds = fromShape.getBoundingRect(true);
+        const toBounds = toShape.getBoundingRect(true);
+
+        // Get connection point positions
+        const fromPoint = {
+            x: fromBounds.left + fromBounds.width * (fromDirection === 'left' ? 0 : fromDirection === 'right' ? 1 : 0.5),
+            y: fromBounds.top + fromBounds.height * (fromDirection === 'top' ? 0 : fromDirection === 'bottom' ? 1 : 0.5)
+        };
+
+        const toPoint = {
+            x: toBounds.left + toBounds.width * (toDirection === 'left' ? 0 : toDirection === 'right' ? 1 : 0.5),
+            y: toBounds.top + toBounds.height * (toDirection === 'top' ? 0 : toDirection === 'bottom' ? 1 : 0.5)
+        };
+
+        // Check if connecting vertically (top-bottom or bottom-top)
+        if ((fromDirection === 'top' || fromDirection === 'bottom') &&
+            (toDirection === 'top' || toDirection === 'bottom')) {
+
+            const dx = Math.abs(fromPoint.x - toPoint.x);
+
+            if (dx < alignmentTolerance) {
+                // Snap toShape horizontally to align with fromShape
+                const offsetX = fromPoint.x - toPoint.x;
+                toShape.set({
+                    left: toShape.left + offsetX
+                });
+                toShape.setCoords();
+                console.log('Snapped shapes vertically aligned');
+            }
+        }
+        // Check if connecting horizontally (left-right or right-left)
+        else if ((fromDirection === 'left' || fromDirection === 'right') &&
+                 (toDirection === 'left' || toDirection === 'right')) {
+
+            const dy = Math.abs(fromPoint.y - toPoint.y);
+
+            if (dy < alignmentTolerance) {
+                // Snap toShape vertically to align with fromShape
+                const offsetY = fromPoint.y - toPoint.y;
+                toShape.set({
+                    top: toShape.top + offsetY
+                });
+                toShape.setCoords();
+                console.log('Snapped shapes horizontally aligned');
+            }
+        }
+
+        canvas.requestRenderAll();
+    }
+
+    /**
      * Find nearest connection point to mouse pointer
      */
     findNearestConnectionPoint(pointer, shape) {
@@ -782,6 +858,9 @@ class ConnectorManager {
                     fromDirection: handle.direction,
                     toDirection: toDirection
                 });
+
+                // Auto-snap shapes to alignment if within tolerance
+                this.snapShapesToAlign(fromShape, toShape, handle.direction, toDirection);
 
                 // Create connector with explicit directions
                 const connector = this.createConnector(fromShape, toShape, {
