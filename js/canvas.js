@@ -135,6 +135,13 @@ function handleSelectionChange(e) {
         if ((obj.isConnector || obj.isConnectorArrow) && obj.connectorObject) {
             obj.connectorObject.highlight(true);
         }
+        // Show connection handles if shape is selected (not text or connectors)
+        else if (obj.id && !obj.isConnector && !obj.isConnectionHandle && obj.type !== 'i-text') {
+            const manager = getConnectorManager();
+            if (manager) {
+                manager.showConnectionHandles(obj);
+            }
+        }
     });
 }
 
@@ -146,10 +153,14 @@ function handleSelectionCleared() {
 
     // Unhighlight all connectors
     const manager = getConnectorManager();
-    if (manager && manager.connectors) {
-        manager.connectors.forEach(connector => {
-            connector.unhighlight();
-        });
+    if (manager) {
+        if (manager.connectors) {
+            manager.connectors.forEach(connector => {
+                connector.unhighlight();
+            });
+        }
+        // Hide connection handles
+        manager.hideConnectionHandles();
     }
 }
 
@@ -688,10 +699,16 @@ function loadCanvasState(state) {
 }
 
 /**
- * Handle mouse over shape - show connection handles
+ * Handle mouse over shape - show connection handles (only if no shape is selected)
  */
 function handleMouseOver(e) {
     const target = e.target;
+
+    // Don't show on hover if something is already selected
+    const activeObject = canvas.getActiveObject();
+    if (activeObject) {
+        return;
+    }
 
     // Only show handles for shapes (not text, connectors, or handles themselves)
     if (!target || target.type === 'textbox' || target.isConnector || target.isConnectorArrow || target.isConnectionHandle) {
@@ -706,10 +723,16 @@ function handleMouseOver(e) {
 }
 
 /**
- * Handle mouse out of shape - hide connection handles
+ * Handle mouse out of shape - hide connection handles (only if no shape is selected)
  */
 function handleMouseOut(e) {
     const target = e.target;
+
+    // Don't hide on mouseout if something is selected
+    const activeObject = canvas.getActiveObject();
+    if (activeObject) {
+        return;
+    }
 
     // Don't hide immediately - let user move to the handle
     setTimeout(() => {
@@ -717,8 +740,8 @@ function handleMouseOut(e) {
         const pointer = canvas.getPointer(e.e);
         const currentTarget = canvas.findTarget(e.e, false);
 
-        // Only hide if not hovering over a handle
-        if (!currentTarget || !currentTarget.isConnectionHandle) {
+        // Only hide if not hovering over a handle and nothing is selected
+        if ((!currentTarget || !currentTarget.isConnectionHandle) && !canvas.getActiveObject()) {
             manager.hideConnectionHandles();
         }
     }, 100);
