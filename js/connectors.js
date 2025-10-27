@@ -404,6 +404,10 @@ class Connector {
         const fromDir = this.getDirectionFromPoint(this.fromPoint);
         const toDir = this.getDirectionFromPoint(this.toPoint);
 
+        // Extract base directions (remove -left, -right, -top, -bottom suffixes)
+        const fromBaseDir = this.getBaseDirection(fromDir);
+        const toBaseDir = this.getBaseDirection(toDir);
+
         let pathString;
 
         // Check if shapes are reasonably aligned - use straight line with tolerance
@@ -413,42 +417,42 @@ class Connector {
 
         // If reasonably aligned vertically, straighten to use same X coordinate
         if (isVerticallyAligned && (
-            (fromDir === 'top' && toDir === 'bottom') ||
-            (fromDir === 'bottom' && toDir === 'top')
+            (fromBaseDir === 'top' && toBaseDir === 'bottom') ||
+            (fromBaseDir === 'bottom' && toBaseDir === 'top')
         )) {
             // Use average X coordinate for perfectly straight vertical line
             const straightX = (start.x + end.x) / 2;
-            pathString = this.routeAroundObstacles(start, end, fromDir, toDir,
+            pathString = this.routeAroundObstacles(start, end, fromBaseDir, toBaseDir,
                 `M ${start.x} ${start.y} L ${straightX} ${start.y} L ${straightX} ${end.y} L ${end.x} ${end.y}`);
         } else if (isHorizontallyAligned && (
-            (fromDir === 'left' && toDir === 'right') ||
-            (fromDir === 'right' && toDir === 'left')
+            (fromBaseDir === 'left' && toBaseDir === 'right') ||
+            (fromBaseDir === 'right' && toBaseDir === 'left')
         )) {
             // Use average Y coordinate for perfectly straight horizontal line
             const straightY = (start.y + end.y) / 2;
-            pathString = this.routeAroundObstacles(start, end, fromDir, toDir,
+            pathString = this.routeAroundObstacles(start, end, fromBaseDir, toBaseDir,
                 `M ${start.x} ${start.y} L ${start.x} ${straightY} L ${end.x} ${straightY} L ${end.x} ${end.y}`);
         }
         // If connecting opposite sides (horizontal to horizontal or vertical to vertical)
-        else if ((fromDir === 'left' || fromDir === 'right') && (toDir === 'left' || toDir === 'right')) {
+        else if ((fromBaseDir === 'left' || fromBaseDir === 'right') && (toBaseDir === 'left' || toBaseDir === 'right')) {
             // Both horizontal - use midpoint
             const midX = start.x + dx / 2;
-            pathString = this.routeAroundObstacles(start, end, fromDir, toDir,
+            pathString = this.routeAroundObstacles(start, end, fromBaseDir, toBaseDir,
                 `M ${start.x} ${start.y} L ${midX} ${start.y} L ${midX} ${end.y} L ${end.x} ${end.y}`);
-        } else if ((fromDir === 'top' || fromDir === 'bottom') && (toDir === 'top' || toDir === 'bottom')) {
+        } else if ((fromBaseDir === 'top' || fromBaseDir === 'bottom') && (toBaseDir === 'top' || toBaseDir === 'bottom')) {
             // Both vertical - use midpoint
             const midY = start.y + dy / 2;
-            pathString = this.routeAroundObstacles(start, end, fromDir, toDir,
+            pathString = this.routeAroundObstacles(start, end, fromBaseDir, toBaseDir,
                 `M ${start.x} ${start.y} L ${start.x} ${midY} L ${end.x} ${midY} L ${end.x} ${end.y}`);
         } else {
             // Mixed directions - go out from start direction, then to end
-            if (fromDir === 'right' || fromDir === 'left') {
+            if (fromBaseDir === 'right' || fromBaseDir === 'left') {
                 // Start horizontal, then vertical
-                pathString = this.routeAroundObstacles(start, end, fromDir, toDir,
+                pathString = this.routeAroundObstacles(start, end, fromBaseDir, toBaseDir,
                     `M ${start.x} ${start.y} L ${end.x} ${start.y} L ${end.x} ${end.y}`);
             } else {
                 // Start vertical, then horizontal
-                pathString = this.routeAroundObstacles(start, end, fromDir, toDir,
+                pathString = this.routeAroundObstacles(start, end, fromBaseDir, toBaseDir,
                     `M ${start.x} ${start.y} L ${start.x} ${end.y} L ${end.x} ${end.y}`);
             }
         }
@@ -456,7 +460,7 @@ class Connector {
         // Calculate angle for arrow based on the incoming direction (toDir)
         // Arrow should point INTO the shape
         let angle = 0;
-        switch (toDir) {
+        switch (toBaseDir) {
             case 'top':
                 angle = 90; // Arrow pointing DOWN into top of shape
                 break;
@@ -475,15 +479,50 @@ class Connector {
     }
 
     /**
+     * Get base direction from direction name (strips -left, -right, -top, -bottom)
+     */
+    getBaseDirection(direction) {
+        if (direction.startsWith('top')) return 'top';
+        if (direction.startsWith('bottom')) return 'bottom';
+        if (direction.startsWith('left')) return 'left';
+        if (direction.startsWith('right')) return 'right';
+        return direction;
+    }
+
+    /**
      * Get direction from normalized point coordinates
+     * Now handles multiple connection points per side
      */
     getDirectionFromPoint(point) {
         if (!point) return 'right';
 
-        if (point.y === 0) return 'top';
-        if (point.y === 1) return 'bottom';
-        if (point.x === 0) return 'left';
-        if (point.x === 1) return 'right';
+        // Top side (y = 0)
+        if (point.y === 0) {
+            if (point.x === 0.25) return 'top-left';
+            if (point.x === 0.75) return 'top-right';
+            return 'top';
+        }
+
+        // Bottom side (y = 1)
+        if (point.y === 1) {
+            if (point.x === 0.25) return 'bottom-left';
+            if (point.x === 0.75) return 'bottom-right';
+            return 'bottom';
+        }
+
+        // Left side (x = 0)
+        if (point.x === 0) {
+            if (point.y === 0.25) return 'left-top';
+            if (point.y === 0.75) return 'left-bottom';
+            return 'left';
+        }
+
+        // Right side (x = 1)
+        if (point.x === 1) {
+            if (point.y === 0.25) return 'right-top';
+            if (point.y === 0.75) return 'right-bottom';
+            return 'right';
+        }
 
         return 'right';
     }
@@ -776,14 +815,27 @@ class ConnectorManager {
 
     /**
      * Get fixed connection point from direction (top/right/bottom/left)
+     * Now supports multiple positions: top-left, top-center, top-right, etc.
      */
     getFixedPointFromDirection(direction, shape, otherShape) {
         // Map of directions to normalized coordinates (0-1)
+        // Each side now has 3 connection points
         const pointMap = {
-            'top': { x: 0.5, y: 0 },      // Center-top
-            'right': { x: 1, y: 0.5 },    // Center-right
-            'bottom': { x: 0.5, y: 1 },   // Center-bottom
-            'left': { x: 0, y: 0.5 }      // Center-left
+            'top-left': { x: 0.25, y: 0 },
+            'top': { x: 0.5, y: 0 },
+            'top-right': { x: 0.75, y: 0 },
+
+            'right-top': { x: 1, y: 0.25 },
+            'right': { x: 1, y: 0.5 },
+            'right-bottom': { x: 1, y: 0.75 },
+
+            'bottom-left': { x: 0.25, y: 1 },
+            'bottom': { x: 0.5, y: 1 },
+            'bottom-right': { x: 0.75, y: 1 },
+
+            'left-top': { x: 0, y: 0.25 },
+            'left': { x: 0, y: 0.5 },
+            'left-bottom': { x: 0, y: 0.75 }
         };
 
         // If auto, determine best direction based on which side is nearest
@@ -910,6 +962,7 @@ class ConnectorManager {
 
     /**
      * Show connection handles on shape (like diagrams.net)
+     * Now shows 3 connection points per side
      */
     showConnectionHandles(shape) {
         this.hideConnectionHandles();
@@ -921,36 +974,124 @@ class ConnectorManager {
         // Create directional arrows (like diagrams.net)
         const offset = 15; // Distance from shape edge
 
-        const handles = [
-            // Top arrow
-            {
-                x: centerX,
-                y: bounds.top - offset,
-                icon: '↑',
-                direction: 'top'
-            },
-            // Right arrow
-            {
-                x: bounds.left + bounds.width + offset,
-                y: centerY,
-                icon: '→',
-                direction: 'right'
-            },
-            // Bottom arrow
-            {
-                x: centerX,
-                y: bounds.top + bounds.height + offset,
-                icon: '↓',
-                direction: 'bottom'
-            },
-            // Left arrow
-            {
-                x: bounds.left - offset,
-                y: centerY,
-                icon: '←',
-                direction: 'left'
-            }
-        ];
+        // For diamonds, adjust handle positions to match actual diamond edges
+        let handles;
+        if (shape.shapeType === 'diamond') {
+            // Diamond has 4 vertices, show handles at actual vertices
+            handles = [
+                // Top vertex
+                {
+                    x: centerX,
+                    y: bounds.top - offset,
+                    icon: '•',
+                    direction: 'top'
+                },
+                // Right vertex
+                {
+                    x: bounds.left + bounds.width + offset,
+                    y: centerY,
+                    icon: '•',
+                    direction: 'right'
+                },
+                // Bottom vertex
+                {
+                    x: centerX,
+                    y: bounds.top + bounds.height + offset,
+                    icon: '•',
+                    direction: 'bottom'
+                },
+                // Left vertex
+                {
+                    x: bounds.left - offset,
+                    y: centerY,
+                    icon: '•',
+                    direction: 'left'
+                }
+            ];
+        } else {
+            // Regular shapes get 3 connection points per side
+            handles = [
+                // Top (3 points)
+                {
+                    x: bounds.left + bounds.width * 0.25,
+                    y: bounds.top - offset,
+                    icon: '•',
+                    direction: 'top-left'
+                },
+                {
+                    x: centerX,
+                    y: bounds.top - offset,
+                    icon: '•',
+                    direction: 'top'
+                },
+                {
+                    x: bounds.left + bounds.width * 0.75,
+                    y: bounds.top - offset,
+                    icon: '•',
+                    direction: 'top-right'
+                },
+
+                // Right (3 points)
+                {
+                    x: bounds.left + bounds.width + offset,
+                    y: bounds.top + bounds.height * 0.25,
+                    icon: '•',
+                    direction: 'right-top'
+                },
+                {
+                    x: bounds.left + bounds.width + offset,
+                    y: centerY,
+                    icon: '•',
+                    direction: 'right'
+                },
+                {
+                    x: bounds.left + bounds.width + offset,
+                    y: bounds.top + bounds.height * 0.75,
+                    icon: '•',
+                    direction: 'right-bottom'
+                },
+
+                // Bottom (3 points)
+                {
+                    x: bounds.left + bounds.width * 0.25,
+                    y: bounds.top + bounds.height + offset,
+                    icon: '•',
+                    direction: 'bottom-left'
+                },
+                {
+                    x: centerX,
+                    y: bounds.top + bounds.height + offset,
+                    icon: '•',
+                    direction: 'bottom'
+                },
+                {
+                    x: bounds.left + bounds.width * 0.75,
+                    y: bounds.top + bounds.height + offset,
+                    icon: '•',
+                    direction: 'bottom-right'
+                },
+
+                // Left (3 points)
+                {
+                    x: bounds.left - offset,
+                    y: bounds.top + bounds.height * 0.25,
+                    icon: '•',
+                    direction: 'left-top'
+                },
+                {
+                    x: bounds.left - offset,
+                    y: centerY,
+                    icon: '•',
+                    direction: 'left'
+                },
+                {
+                    x: bounds.left - offset,
+                    y: bounds.top + bounds.height * 0.75,
+                    icon: '•',
+                    direction: 'left-bottom'
+                }
+            ];
+        }
 
         handles.forEach(handleData => {
             const handle = new fabric.Text(handleData.icon, {
