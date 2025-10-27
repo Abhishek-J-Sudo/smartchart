@@ -1,0 +1,152 @@
+/* Shape-specific styles for canvas objects */
+
+/* Shape Selection Styles */
+.canvas-object.selected {
+    outline: 2px solid #3498db;
+    outline-offset: 2px;
+}
+
+/* Shape Hover Styles */
+.canvas-object:hover {
+    cursor: move;
+}
+
+/* Resize Handles */
+.resize-handle {
+    width: 10px;
+    height: 10px;
+    background-color: #3498db;
+    border: 2px solid white;
+    border-radius: 50%;
+    position: absolute;
+    cursor: pointer;
+}
+
+.resize-handle.nw { cursor: nw-resize; }
+.resize-handle.n  { cursor: n-resize; }
+.resize-handle.ne { cursor: ne-resize; }
+.resize-handle.e  { cursor: e-resize; }
+.resize-handle.se { cursor: se-resize; }
+.resize-handle.s  { cursor: s-resize; }
+.resize-handle.sw { cursor: sw-resize; }
+.resize-handle.w  { cursor: w-resize; }
+
+/* Rotation Handle */
+.rotation-handle {
+    width: 12px;
+    height: 12px;
+    background-color: #2ecc71;
+    border: 2px solid white;
+    border-radius: 50%;
+    position: absolute;
+    cursor: grab;
+}
+
+.rotation-handle:active {
+    cursor: grabbing;
+}
+
+/* Connector/Arrow Styles */
+.connector-line {
+    stroke: #2c3e50;
+    stroke-width: 2;
+    fill: none;
+}
+
+.connector-line.selected {
+    stroke: #3498db;
+    stroke-width: 3;
+}
+
+.connector-arrow {
+    fill: #2c3e50;
+}
+
+.connector-arrow.selected {
+    fill: #3498db;
+}
+
+/* Shape Fill Patterns */
+.shape-fill-solid {
+    fill-opacity: 1;
+}
+
+.shape-fill-transparent {
+    fill-opacity: 0;
+}
+
+.shape-fill-semi {
+    fill-opacity: 0.5;
+}
+
+/* Shape Border Styles */
+.shape-border-solid {
+    stroke-dasharray: none;
+}
+
+.shape-border-dashed {
+    stroke-dasharray: 5, 5;
+}
+
+.shape-border-dotted {
+    stroke-dasharray: 2, 2;
+}
+
+/* Text Styles */
+.shape-text {
+    font-family: Arial, sans-serif;
+    fill: #2c3e50;
+    text-anchor: middle;
+    dominant-baseline: middle;
+    user-select: none;
+}
+
+.shape-text.editing {
+    outline: 1px dashed #3498db;
+    background-color: white;
+}
+
+/* Grid Background */
+.canvas-grid {
+    background-image:
+        linear-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+    background-size: 20px 20px;
+}
+
+/* Multi-select Box */
+.selection-box {
+    fill: rgba(52, 152, 219, 0.1);
+    stroke: #3498db;
+    stroke-width: 1;
+    stroke-dasharray: 5, 5;
+}
+
+/* Alignment Guides */
+.alignment-guide {
+    stroke: #e74c3c;
+    stroke-width: 1;
+    stroke-dasharray: 3, 3;
+    opacity: 0.7;
+}
+
+/* Shape Shadows */
+.shape-shadow {
+    filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+/* Animation for new shapes */
+@keyframes shapeAppear {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.shape-new {
+    animation: shapeAppear 0.2s ease-out;
+}

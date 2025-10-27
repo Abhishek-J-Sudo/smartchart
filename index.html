@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartChart - Diagram Tool</title>
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/shapes.css">
+</head>
+<body>
+    <!-- Left Sidebar - Shape Palette -->
+    <aside id="toolbar" class="sidebar left">
+        <h2>Shapes</h2>
+        <div id="shape-palette">
+            <!-- Shape thumbnails will be added here -->
+        </div>
+    </aside>
+
+    <!-- Main Canvas Area -->
+    <main id="canvas-container">
+        <div id="canvas-controls">
+            <button id="zoom-in">+</button>
+            <button id="zoom-out">-</button>
+            <button id="reset-zoom">Reset</button>
+            <button id="toggle-grid">Grid</button>
+        </div>
+        <canvas id="main-canvas"></canvas>
+    </main>
+
+    <!-- Right Sidebar - Properties Panel -->
+    <aside id="properties" class="sidebar right">
+        <h2>Properties</h2>
+        <div id="properties-panel">
+            <p>Select a shape to edit its properties</p>
+        </div>
+    </aside>
+
+    <!-- Top Menu Bar -->
+    <nav id="menu-bar">
+        <div class="menu-group">
+            <button id="new-project">New</button>
+            <button id="save-project">Save</button>
+            <button id="load-project">Load</button>
+        </div>
+        <div class="menu-group">
+            <button id="undo">Undo</button>
+            <button id="redo">Redo</button>
+        </div>
+        <div class="menu-group">
+            <button id="export-pptx">Export to PowerPoint</button>
+            <div id="autosave-notification" class="hidden">
+                <span>Auto-saved project found</span>
+                <button id="restore-autosave">Restore</button>
+                <button id="dismiss-autosave">✕</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Include Fabric.js for canvas manipulation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+
+    <!-- Include PptxGenJS for PowerPoint export -->
+    <script src="lib/pptxgen.min.js"></script>
+
+    <!-- Application Scripts -->
+    <script src="js/utils.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/shapes.js"></script>
+    <script src="js/canvas.js"></script>
+    <script src="js/toolbar.js"></script>
+    <script src="js/properties.js"></script>
+    <script src="js/export.js"></script>
+</body>
+</html>
