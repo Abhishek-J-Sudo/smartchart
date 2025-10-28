@@ -170,24 +170,55 @@ body {
 #shape-palette {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
+    gap: 12px;
 }
 
 .shape-item {
-    padding: 20px;
-    background-color: #ecf0f1;
-    border: 2px solid #bdc3c7;
-    border-radius: 8px;
+    padding: 24px 16px;
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    border: 2px solid #dee2e6;
+    border-radius: 12px;
     text-align: center;
-    cursor: move;
-    transition: all 0.2s;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+.shape-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    opacity: 0;
+    transition: opacity 0.3s;
+    z-index: 0;
 }
 
 .shape-item:hover {
-    background-color: #3498db;
-    color: white;
-    border-color: #2980b9;
-    transform: scale(1.05);
+    border-color: #3498db;
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(52, 152, 219, 0.2);
+}
+
+.shape-item:hover::before {
+    opacity: 0.95;
+}
+
+.shape-item:hover .shape-icon,
+.shape-item:hover span,
+.shape-item:hover .shape-hint {
+    color: white !important;
+    position: relative;
+    z-index: 1;
+}
+
+.shape-item:active {
+    transform: translateY(-2px);
 }
 
 .shape-item svg {
@@ -199,6 +230,13 @@ body {
 .shape-item span {
     display: block;
     font-size: 12px;
+    position: relative;
+    z-index: 1;
+}
+
+.shape-icon {
+    position: relative;
+    z-index: 1;
 }
 
 /* Properties Panel */

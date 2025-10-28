@@ -28,13 +28,34 @@ function createShapeItem(shape) {
     div.className = 'shape-item';
     div.setAttribute('data-shape-type', shape.type);
     div.innerHTML = `
-        <div style="font-size: 32px;">${shape.icon}</div>
-        <span>${shape.name}</span>
+        <div class="shape-icon" style="font-size: 40px; margin-bottom: 8px; transition: transform 0.2s;">${shape.icon}</div>
+        <span style="font-size: 12px; font-weight: 600; color: #495057; letter-spacing: 0.3px;">${shape.name}</span>
+        <div class="shape-hint" style="font-size: 10px; color: #adb5bd; margin-top: 4px; opacity: 0; transition: opacity 0.2s;">Click or drag</div>
     `;
 
     // Click to add shape to canvas
     div.addEventListener('click', () => {
         addShapeToCanvas(shape.type);
+        // Add click animation
+        div.style.transform = 'scale(0.95)';
+        setTimeout(() => {
+            div.style.transform = 'scale(1)';
+        }, 100);
+    });
+
+    // Hover effects
+    div.addEventListener('mouseenter', () => {
+        const icon = div.querySelector('.shape-icon');
+        const hint = div.querySelector('.shape-hint');
+        icon.style.transform = 'scale(1.1)';
+        hint.style.opacity = '1';
+    });
+
+    div.addEventListener('mouseleave', () => {
+        const icon = div.querySelector('.shape-icon');
+        const hint = div.querySelector('.shape-hint');
+        icon.style.transform = 'scale(1)';
+        hint.style.opacity = '0';
     });
 
     // Drag and drop support
@@ -43,6 +64,11 @@ function createShapeItem(shape) {
         e.dataTransfer.effectAllowed = 'copy';
         e.dataTransfer.setData('shapeType', shape.type);
         e.dataTransfer.setData('text/plain', shape.type); // Fallback
+        div.style.opacity = '0.5';
+    });
+
+    div.addEventListener('dragend', () => {
+        div.style.opacity = '1';
     });
 
     return div;

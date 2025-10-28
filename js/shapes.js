@@ -16,15 +16,22 @@ function createRectangle(options = {}) {
     const rect = new fabric.Rect({
         left: options.left || 100,
         top: options.top || 100,
-        width: options.width || 120,  // Changed from 80 to 120 (6 * 20)
-        height: options.height || 80,  // Changed from 60 to 80 (4 * 20)
-        fill: options.fill || '#3498db',
-        stroke: options.stroke || '#2c3e50',
-        strokeWidth: options.strokeWidth || 2,
-        rx: options.rx || 0,
-        ry: options.ry || 0,
+        width: options.width || 140,  // Process box
+        height: options.height || 80,
+        fill: options.fill || '#4A90E2',  // Modern blue
+        stroke: options.stroke || '#2E5C8A',  // Darker blue border
+        strokeWidth: options.strokeWidth || 2.5,
+        strokeUniform: true,  // Keep stroke width constant when scaling
+        rx: options.rx || 6,  // Slightly rounded corners
+        ry: options.ry || 6,
         id: generateId(),
-        shapeType: SHAPE_TYPES.RECTANGLE
+        shapeType: SHAPE_TYPES.RECTANGLE,
+        shadow: new fabric.Shadow({
+            color: 'rgba(0, 0, 0, 0.15)',
+            blur: 8,
+            offsetX: 0,
+            offsetY: 2
+        })
     });
 
     // Text is now handled by persistent IText objects (see canvas.js)
@@ -38,12 +45,19 @@ function createCircle(options = {}) {
     const circle = new fabric.Circle({
         left: options.left || 100,
         top: options.top || 100,
-        radius: options.radius || 40,  // Changed from 30 to 40 (2 * 20)
-        fill: options.fill || '#2ecc71',
-        stroke: options.stroke || '#2c3e50',
-        strokeWidth: options.strokeWidth || 2,
+        radius: options.radius || 45,  // Start/End terminator
+        fill: options.fill || '#50C878',  // Emerald green
+        stroke: options.stroke || '#2D7A4F',  // Darker green border
+        strokeWidth: options.strokeWidth || 2.5,
+        strokeUniform: true,  // Keep stroke width constant when scaling
         id: generateId(),
-        shapeType: SHAPE_TYPES.CIRCLE
+        shapeType: SHAPE_TYPES.CIRCLE,
+        shadow: new fabric.Shadow({
+            color: 'rgba(0, 0, 0, 0.15)',
+            blur: 8,
+            offsetX: 0,
+            offsetY: 2
+        })
     });
 
     // Text is now handled by persistent IText objects (see canvas.js)
@@ -54,8 +68,8 @@ function createCircle(options = {}) {
  * Create a diamond shape
  */
 function createDiamond(options = {}) {
-    const width = options.width || 80;   // Changed from 70 to 80 (4 * 20)
-    const height = options.height || 80;  // Changed from 70 to 80 (4 * 20)
+    const width = options.width || 100;   // Decision diamond
+    const height = options.height || 90;
 
     const points = [
         { x: width / 2, y: 0 },
@@ -67,11 +81,18 @@ function createDiamond(options = {}) {
     const diamond = new fabric.Polygon(points, {
         left: options.left || 100,
         top: options.top || 100,
-        fill: options.fill || '#e74c3c',
-        stroke: options.stroke || '#2c3e50',
-        strokeWidth: options.strokeWidth || 2,
+        fill: options.fill || '#FFB84D',  // Warm orange/amber
+        stroke: options.stroke || '#CC8A2E',  // Darker orange border
+        strokeWidth: options.strokeWidth || 2.5,
+        strokeUniform: true,  // Keep stroke width constant when scaling
         id: generateId(),
-        shapeType: SHAPE_TYPES.DIAMOND
+        shapeType: SHAPE_TYPES.DIAMOND,
+        shadow: new fabric.Shadow({
+            color: 'rgba(0, 0, 0, 0.15)',
+            blur: 8,
+            offsetX: 0,
+            offsetY: 2
+        })
     });
 
     // Text is now handled by persistent IText objects (see canvas.js)
@@ -85,13 +106,20 @@ function createTriangle(options = {}) {
     const triangle = new fabric.Triangle({
         left: options.left || 100,
         top: options.top || 100,
-        width: options.width || 80,   // Changed from 70 to 80 (4 * 20)
-        height: options.height || 80,  // Changed from 70 to 80 (4 * 20)
-        fill: options.fill || '#f39c12',
-        stroke: options.stroke || '#2c3e50',
-        strokeWidth: options.strokeWidth || 2,
+        width: options.width || 90,   // Data/Document shape
+        height: options.height || 85,
+        fill: options.fill || '#A78BFA',  // Purple/Lavender
+        stroke: options.stroke || '#7C5CBF',  // Darker purple border
+        strokeWidth: options.strokeWidth || 2.5,
+        strokeUniform: true,  // Keep stroke width constant when scaling
         id: generateId(),
-        shapeType: SHAPE_TYPES.TRIANGLE
+        shapeType: SHAPE_TYPES.TRIANGLE,
+        shadow: new fabric.Shadow({
+            color: 'rgba(0, 0, 0, 0.15)',
+            blur: 8,
+            offsetX: 0,
+            offsetY: 2
+        })
     });
 
     // Text is now handled by persistent IText objects (see canvas.js)
@@ -105,9 +133,9 @@ function createTextBox(options = {}) {
     return new fabric.Textbox(options.text || 'Text', {
         left: options.left || 100,
         top: options.top || 100,
-        width: options.width || 200,  // Already a multiple of 20 (10 * 20)
+        width: options.width || 200,
         fontSize: options.fontSize || 16,
-        fill: options.fill || '#2c3e50',
+        fill: options.fill || '#1a1a1a',  // Darker text for better readability
         fontFamily: options.fontFamily || 'Arial',
         textAlign: options.textAlign || 'left',
         id: generateId(),

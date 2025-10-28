@@ -33,9 +33,9 @@ class Connector {
         this.toPoint = options.toPoint || null;
 
         // Visual properties
-        this.strokeColor = options.strokeColor || '#2c3e50';
-        this.strokeWidth = options.strokeWidth || 2;
-        this.arrowSize = options.arrowSize || 10;
+        this.strokeColor = options.strokeColor || '#5A6C7D';  // Modern gray-blue
+        this.strokeWidth = options.strokeWidth || 2.5;
+        this.arrowSize = options.arrowSize || 12;
 
         // Waypoints for custom routing
         this.waypoints = options.waypoints || [];
