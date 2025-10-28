@@ -43,6 +43,10 @@ class Connector {
         // Store the chosen route to keep it stable when shapes move
         this.lockedRoute = options.lockedRoute || null;
 
+        // Text label
+        this.text = options.text || '';
+        this._textObject = null;
+
         // Fabric.js objects
         this.path = null;
         this.arrow = null;
@@ -622,6 +626,16 @@ class Connector {
             angle: pathData.endAngle
         });
         this.arrow.setCoords();
+
+        // Update text position if text exists
+        if (this._textObject) {
+            const midpoint = this.getPathMidpoint();
+            this._textObject.set({
+                left: midpoint.x,
+                top: midpoint.y
+            });
+            this._textObject.setCoords();
+        }
     }
 
     /**
@@ -786,12 +800,77 @@ class Connector {
         // Cleanup waypoint circles
         this.waypointCircles.forEach(circle => canvas.remove(circle));
 
+        // Remove text object if it exists
+        if (this._textObject) {
+            canvas.remove(this._textObject);
+            this._textObject = null;
+        }
+
         // Unbind events
         const events = ['moving', 'scaling', 'rotating', 'modified'];
         events.forEach(event => {
             this.fromShape.off(event);
             this.toShape.off(event);
         });
+    }
+
+    /**
+     * Get midpoint of the connector path for text placement
+     */
+    getPathMidpoint() {
+        if (!this.path) {
+            return { x: 0, y: 0 };
+        }
+
+        // Get the path data
+        const pathData = this.path.path;
+
+        if (!pathData || pathData.length === 0) {
+            return { x: 0, y: 0 };
+        }
+
+        // Calculate total path length and find middle
+        let totalLength = 0;
+        const segments = [];
+
+        for (let i = 1; i < pathData.length; i++) {
+            const prev = pathData[i - 1];
+            const curr = pathData[i];
+
+            // Get coordinates (handle both M and L commands)
+            const x1 = prev[prev.length - 2];
+            const y1 = prev[prev.length - 1];
+            const x2 = curr[curr.length - 2];
+            const y2 = curr[curr.length - 1];
+
+            const segmentLength = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+            segments.push({
+                x1, y1, x2, y2,
+                length: segmentLength,
+                cumulativeLength: totalLength + segmentLength
+            });
+            totalLength += segmentLength;
+        }
+
+        // Find segment containing the midpoint
+        const halfLength = totalLength / 2;
+        let midpoint = { x: 0, y: 0 };
+
+        for (const segment of segments) {
+            if (segment.cumulativeLength >= halfLength) {
+                // Interpolate within this segment
+                const segmentStart = segment.cumulativeLength - segment.length;
+                const t = (halfLength - segmentStart) / segment.length;
+
+                midpoint = {
+                    x: segment.x1 + (segment.x2 - segment.x1) * t,
+                    y: segment.y1 + (segment.y2 - segment.y1) * t
+                };
+                break;
+            }
+        }
+
+        return midpoint;
     }
 
     /**
@@ -810,7 +889,8 @@ class Connector {
             strokeColor: this.strokeColor,
             strokeWidth: this.strokeWidth,
             arrowSize: this.arrowSize,
-            lockedRoute: this.lockedRoute
+            lockedRoute: this.lockedRoute,
+            text: this.text || '' // Include text in serialization
         };
     }
 }

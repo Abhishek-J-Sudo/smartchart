@@ -57,12 +57,9 @@ function initPropertiesPanel() {
                 </div>
             </div>
 
-            <div class="property-group" id="text-properties" class="hidden">
-                <label>Font Size</label>
-                <input type="number" id="prop-font-size" min="8" max="72" value="16" />
-            </div>
+            <div class="property-group" id="text-properties-group" class="hidden">
+                <h3 style="margin-top: 10px; margin-bottom: 10px; font-size: 14px;">Text Formatting</h3>
 
-            <div class="property-group" id="text-properties-2" class="hidden">
                 <label>Font Family</label>
                 <select id="prop-font-family">
                     <option value="Arial">Arial</option>
@@ -70,7 +67,32 @@ function initPropertiesPanel() {
                     <option value="Times New Roman">Times New Roman</option>
                     <option value="Courier New">Courier New</option>
                     <option value="Georgia">Georgia</option>
+                    <option value="Verdana">Verdana</option>
+                    <option value="Comic Sans MS">Comic Sans MS</option>
                 </select>
+
+                <label style="margin-top: 8px;">Font Size</label>
+                <input type="number" id="prop-font-size" min="8" max="72" value="16" />
+
+                <label style="margin-top: 8px;">Text Color</label>
+                <input type="color" id="prop-text-color" value="#000000" />
+
+                <label style="margin-top: 8px;">Text Background</label>
+                <input type="color" id="prop-text-bg-color" value="#ffffff" />
+
+                <label style="margin-top: 8px;">Font Style</label>
+                <div class="property-row" style="display: flex; gap: 5px; margin-top: 5px;">
+                    <button id="text-bold" class="text-format-btn" title="Bold" style="flex: 1; padding: 8px; border: 1px solid #ccc; background: white; cursor: pointer; font-weight: bold;">B</button>
+                    <button id="text-italic" class="text-format-btn" title="Italic" style="flex: 1; padding: 8px; border: 1px solid #ccc; background: white; cursor: pointer; font-style: italic;">I</button>
+                    <button id="text-underline" class="text-format-btn" title="Underline" style="flex: 1; padding: 8px; border: 1px solid #ccc; background: white; cursor: pointer; text-decoration: underline;">U</button>
+                </div>
+
+                <label style="margin-top: 8px;">Text Align</label>
+                <div class="property-row" style="display: flex; gap: 5px; margin-top: 5px;">
+                    <button id="text-align-left" class="text-align-btn" title="Align Left" style="flex: 1; padding: 8px; border: 1px solid #ccc; background: white; cursor: pointer;">⬅</button>
+                    <button id="text-align-center" class="text-align-btn" title="Align Center" style="flex: 1; padding: 8px; border: 1px solid #ccc; background: white; cursor: pointer;">↔</button>
+                    <button id="text-align-right" class="text-align-btn" title="Align Right" style="flex: 1; padding: 8px; border: 1px solid #ccc; background: white; cursor: pointer;">➡</button>
+                </div>
             </div>
 
             <div class="property-group">
@@ -141,12 +163,50 @@ function setupPropertyListeners() {
 
     // Font size
     document.getElementById('prop-font-size').addEventListener('input', (e) => {
-        updateActiveObjectProperty('fontSize', parseInt(e.target.value));
+        updateTextProperty('fontSize', parseInt(e.target.value));
     });
 
     // Font family
     document.getElementById('prop-font-family').addEventListener('change', (e) => {
-        updateActiveObjectProperty('fontFamily', e.target.value);
+        updateTextProperty('fontFamily', e.target.value);
+    });
+
+    // Text color
+    document.getElementById('prop-text-color').addEventListener('input', (e) => {
+        updateTextProperty('fill', e.target.value);
+    });
+
+    // Text background color
+    document.getElementById('prop-text-bg-color').addEventListener('input', (e) => {
+        updateTextProperty('backgroundColor', e.target.value);
+    });
+
+    // Bold
+    document.getElementById('text-bold').addEventListener('click', () => {
+        toggleTextStyle('fontWeight', 'bold', 'normal');
+    });
+
+    // Italic
+    document.getElementById('text-italic').addEventListener('click', () => {
+        toggleTextStyle('fontStyle', 'italic', 'normal');
+    });
+
+    // Underline
+    document.getElementById('text-underline').addEventListener('click', () => {
+        toggleTextStyle('underline', true, false);
+    });
+
+    // Text align
+    document.getElementById('text-align-left').addEventListener('click', () => {
+        updateTextProperty('textAlign', 'left');
+    });
+
+    document.getElementById('text-align-center').addEventListener('click', () => {
+        updateTextProperty('textAlign', 'center');
+    });
+
+    document.getElementById('text-align-right').addEventListener('click', () => {
+        updateTextProperty('textAlign', 'right');
     });
 
     // Layer controls
@@ -207,15 +267,46 @@ function updatePropertiesPanel(selectedObjects) {
         document.getElementById('prop-height').value = Math.round(obj.radius * 2 * (obj.scaleY || 1));
     }
 
-    // Show/hide text properties
-    if (obj.type === 'textbox' || obj.type === 'text') {
-        document.getElementById('text-properties').classList.remove('hidden');
-        document.getElementById('text-properties-2').classList.remove('hidden');
-        if (obj.fontSize) document.getElementById('prop-font-size').value = obj.fontSize;
-        if (obj.fontFamily) document.getElementById('prop-font-family').value = obj.fontFamily;
+    // Show/hide text properties for text objects and shape/connector text
+    const isTextObject = obj.type === 'textbox' || obj.type === 'text' || obj.type === 'i-text';
+    const isShapeTextObject = isTextObject && obj._isShapeText; // User selected the shape's text directly
+    const isConnectorTextObject = isTextObject && obj._isConnectorText; // User selected the connector's text directly
+    const isConnectorWithText = (obj.isConnector || obj.isConnectorArrow) && obj.connectorObject && obj.connectorObject._textObject;
+
+    // Only show RTE when:
+    // 1. A standalone text object is selected
+    // 2. A shape's text object is selected (not the shape itself)
+    // 3. A connector's text object is selected OR the connector itself is selected
+    if ((isTextObject && !obj._parentShape) || isShapeTextObject || isConnectorTextObject || isConnectorWithText) {
+        document.getElementById('text-properties-group').classList.remove('hidden');
+
+        // Get the actual text object
+        let textObj = obj;
+        if (isConnectorWithText && !isConnectorTextObject) {
+            // Connector line/arrow selected, get its text object
+            textObj = obj.connectorObject._textObject;
+        }
+        // If shape text or connector text is selected directly, obj is already the text object
+
+        // Update text formatting controls
+        if (textObj.fontSize) document.getElementById('prop-font-size').value = textObj.fontSize;
+        if (textObj.fontFamily) document.getElementById('prop-font-family').value = textObj.fontFamily;
+
+        // Convert color to hex format for color picker
+        if (textObj.fill) {
+            const fillColor = convertToHex(textObj.fill);
+            document.getElementById('prop-text-color').value = fillColor;
+        }
+        if (textObj.backgroundColor) {
+            const bgColor = convertToHex(textObj.backgroundColor);
+            document.getElementById('prop-text-bg-color').value = bgColor;
+        }
+
+        // Update button states for bold/italic/underline
+        updateTextFormatButtonStates(textObj);
+        updateTextAlignButtonStates(textObj);
     } else {
-        document.getElementById('text-properties').classList.add('hidden');
-        document.getElementById('text-properties-2').classList.add('hidden');
+        document.getElementById('text-properties-group').classList.add('hidden');
     }
 }
 
@@ -264,6 +355,176 @@ function updateActiveObjectSize(dimension, value) {
 
     canvas.requestRenderAll();
     saveCanvasState();
+}
+
+/**
+ * Update text property for the active text object (including shape/connector text)
+ */
+function updateTextProperty(property, value) {
+    const activeObject = canvas.getActiveObject();
+    if (!activeObject) return;
+
+    let textObj = null;
+
+    // Check if it's a text object
+    if (activeObject.type === 'textbox' || activeObject.type === 'text' || activeObject.type === 'i-text') {
+        textObj = activeObject;
+    }
+    // Check if it's a shape with text
+    else if (activeObject._textObject) {
+        textObj = activeObject._textObject;
+    }
+    // Check if it's a connector with text
+    else if ((activeObject.isConnector || activeObject.isConnectorArrow) && activeObject.connectorObject && activeObject.connectorObject._textObject) {
+        textObj = activeObject.connectorObject._textObject;
+    }
+
+    if (textObj) {
+        textObj.set(property, value);
+        canvas.requestRenderAll();
+        saveCanvasState();
+
+        // Update button states after change
+        if (property === 'textAlign') {
+            updateTextAlignButtonStates(textObj);
+        }
+    }
+}
+
+/**
+ * Toggle text style (bold, italic, underline)
+ */
+function toggleTextStyle(property, activeValue, inactiveValue) {
+    const activeObject = canvas.getActiveObject();
+    if (!activeObject) return;
+
+    let textObj = null;
+
+    // Check if it's a text object
+    if (activeObject.type === 'textbox' || activeObject.type === 'text' || activeObject.type === 'i-text') {
+        textObj = activeObject;
+    }
+    // Check if it's a shape with text
+    else if (activeObject._textObject) {
+        textObj = activeObject._textObject;
+    }
+    // Check if it's a connector with text
+    else if ((activeObject.isConnector || activeObject.isConnectorArrow) && activeObject.connectorObject && activeObject.connectorObject._textObject) {
+        textObj = activeObject.connectorObject._textObject;
+    }
+
+    if (textObj) {
+        const currentValue = textObj.get(property);
+        const newValue = currentValue === activeValue ? inactiveValue : activeValue;
+        textObj.set(property, newValue);
+        canvas.requestRenderAll();
+        saveCanvasState();
+
+        // Update button states
+        updateTextFormatButtonStates(textObj);
+    }
+}
+
+/**
+ * Update text format button states (bold, italic, underline)
+ */
+function updateTextFormatButtonStates(textObj) {
+    const boldBtn = document.getElementById('text-bold');
+    const italicBtn = document.getElementById('text-italic');
+    const underlineBtn = document.getElementById('text-underline');
+
+    // Bold
+    if (textObj.fontWeight === 'bold') {
+        boldBtn.style.backgroundColor = '#3498db';
+        boldBtn.style.color = 'white';
+    } else {
+        boldBtn.style.backgroundColor = 'white';
+        boldBtn.style.color = 'black';
+    }
+
+    // Italic
+    if (textObj.fontStyle === 'italic') {
+        italicBtn.style.backgroundColor = '#3498db';
+        italicBtn.style.color = 'white';
+    } else {
+        italicBtn.style.backgroundColor = 'white';
+        italicBtn.style.color = 'black';
+    }
+
+    // Underline
+    if (textObj.underline === true) {
+        underlineBtn.style.backgroundColor = '#3498db';
+        underlineBtn.style.color = 'white';
+    } else {
+        underlineBtn.style.backgroundColor = 'white';
+        underlineBtn.style.color = 'black';
+    }
+}
+
+/**
+ * Update text align button states
+ */
+function updateTextAlignButtonStates(textObj) {
+    const leftBtn = document.getElementById('text-align-left');
+    const centerBtn = document.getElementById('text-align-center');
+    const rightBtn = document.getElementById('text-align-right');
+
+    // Reset all
+    leftBtn.style.backgroundColor = 'white';
+    leftBtn.style.color = 'black';
+    centerBtn.style.backgroundColor = 'white';
+    centerBtn.style.color = 'black';
+    rightBtn.style.backgroundColor = 'white';
+    rightBtn.style.color = 'black';
+
+    // Highlight active
+    const align = textObj.textAlign || 'left';
+    if (align === 'left') {
+        leftBtn.style.backgroundColor = '#3498db';
+        leftBtn.style.color = 'white';
+    } else if (align === 'center') {
+        centerBtn.style.backgroundColor = '#3498db';
+        centerBtn.style.color = 'white';
+    } else if (align === 'right') {
+        rightBtn.style.backgroundColor = '#3498db';
+        rightBtn.style.color = 'white';
+    }
+}
+
+/**
+ * Convert color to hex format for color picker
+ */
+function convertToHex(color) {
+    if (!color) return '#000000';
+
+    // Already hex
+    if (color.startsWith('#')) return color;
+
+    // Named colors
+    const namedColors = {
+        'black': '#000000',
+        'white': '#ffffff',
+        'red': '#ff0000',
+        'green': '#00ff00',
+        'blue': '#0000ff'
+    };
+
+    if (namedColors[color.toLowerCase()]) {
+        return namedColors[color.toLowerCase()];
+    }
+
+    // RGB format: rgb(255, 255, 255)
+    if (color.startsWith('rgb')) {
+        const matches = color.match(/\d+/g);
+        if (matches && matches.length >= 3) {
+            const r = parseInt(matches[0]).toString(16).padStart(2, '0');
+            const g = parseInt(matches[1]).toString(16).padStart(2, '0');
+            const b = parseInt(matches[2]).toString(16).padStart(2, '0');
+            return `#${r}${g}${b}`;
+        }
+    }
+
+    return '#000000';
 }
 
 // Initialize properties panel when DOM is ready

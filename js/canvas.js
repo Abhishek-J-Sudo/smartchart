@@ -273,20 +273,50 @@ function handleObjectScaling(e) {
 function handleDoubleClick(opt) {
     const target = opt.target;
 
-    // If double-clicked on a shape's text object, enter edit mode
-    if (target && target.type === 'i-text' && target._isShapeText) {
+    // If double-clicked on a shape's or connector's text object, enter edit mode
+    if (target && target.type === 'i-text' && (target._isShapeText || target._isConnectorText)) {
         target.enterEditing();
         target.selectAll();
         return;
     }
 
     // If double-clicked on a standalone textbox, ignore (let default behavior handle it)
-    if (!target || target.type === 'textbox' || (target.type === 'i-text' && !target._isShapeText)) {
+    if (!target || target.type === 'textbox' || (target.type === 'i-text' && !target._isShapeText && !target._isConnectorText)) {
         return;
     }
 
-    // Ignore connectors and connection handles
-    if (target.isConnector || target.isConnectorArrow || target.isConnectionHandle) {
+    // Handle double-click on connector path or arrow
+    if (target.isConnector || target.isConnectorArrow) {
+        const connector = target.connectorObject;
+        if (connector) {
+            if (connector._textObject) {
+                // Text object already exists, just enter edit mode
+                const itext = connector._textObject;
+                itext.enterEditing();
+                itext.selectAll();
+                canvas.setActiveObject(itext);
+
+                // Add exit editing handler
+                const exitEditingHandler = (e) => {
+                    if (itext.isEditing && e.target !== itext) {
+                        itext.exitEditing();
+                        canvas.off('mouse:down', exitEditingHandler);
+                    }
+                };
+
+                setTimeout(() => {
+                    canvas.on('mouse:down', exitEditingHandler);
+                }, 100);
+            } else {
+                // Create new text object for this connector
+                createConnectorTextObject(connector);
+            }
+        }
+        return;
+    }
+
+    // Ignore connection handles
+    if (target.isConnectionHandle) {
         return;
     }
 
@@ -346,7 +376,7 @@ function createShapeTextObject(shape) {
         top: shapeCenter.y,
         fontSize: 14,
         fontFamily: 'Arial',
-        fill: '#ffffff',
+        fill: 'white',
         stroke: '',
         strokeWidth: 0,
         textAlign: 'center',
@@ -355,13 +385,13 @@ function createShapeTextObject(shape) {
         width: textWidth,
         splitByGrapheme: true,
         editable: true,
-        selectable: false, // Don't select separately from shape
+        selectable: true, // Allow selection for editing
         _isShapeText: true, // Flag to identify as shape text
         _parentShape: shape, // Reference to parent shape
         lockMovementX: true, // Prevent independent movement
         lockMovementY: true,
         hasControls: false, // No resize handles
-        hasBorders: false, // No selection borders
+        hasBorders: true, // Show selection borders
         evented: true // Allow double-click events
     });
 
@@ -407,6 +437,74 @@ function createShapeTextObject(shape) {
     // When text is edited, update shape's text property for backward compatibility
     itext.on('changed', () => {
         shape.set('text', itext.text);
+    });
+
+    // Exit editing mode when clicking outside
+    const exitEditingHandler = (e) => {
+        if (itext.isEditing && e.target !== itext) {
+            itext.exitEditing();
+            canvas.off('mouse:down', exitEditingHandler);
+        }
+    };
+
+    // Add listener after a short delay to prevent immediate trigger
+    setTimeout(() => {
+        canvas.on('mouse:down', exitEditingHandler);
+    }, 100);
+
+    canvas.requestRenderAll();
+}
+
+/**
+ * Create a persistent text object for a connector
+ */
+function createConnectorTextObject(connector) {
+    // Calculate midpoint of the connector path
+    const midpoint = connector.getPathMidpoint();
+
+    // Get existing text if any (for backward compatibility)
+    const existingText = connector.text || '';
+
+    // Create IText object with black text on white background
+    const itext = new fabric.IText(existingText, {
+        left: midpoint.x,
+        top: midpoint.y,
+        fontSize: 12,
+        fontFamily: 'Arial',
+        fill: 'black',
+        backgroundColor: 'white',
+        stroke: '',
+        strokeWidth: 0,
+        textAlign: 'center',
+        originX: 'center',
+        originY: 'center',
+        width: 150,
+        splitByGrapheme: true,
+        editable: true,
+        selectable: true, // Allow selection for editing
+        _isConnectorText: true, // Flag to identify as connector text
+        _parentConnector: connector, // Reference to parent connector
+        lockMovementX: true, // Prevent independent movement
+        lockMovementY: true,
+        hasControls: false, // No resize handles
+        hasBorders: true, // Show selection borders
+        evented: true // Allow double-click events
+    });
+
+    // Store reference in connector
+    connector._textObject = itext;
+
+    // Add to canvas
+    canvas.add(itext);
+
+    // Enter editing mode immediately
+    canvas.setActiveObject(itext);
+    itext.enterEditing();
+    itext.selectAll();
+
+    // When text is edited, update connector's text property
+    itext.on('changed', () => {
+        connector.text = itext.text;
     });
 
     // Exit editing mode when clicking outside
