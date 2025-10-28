@@ -48,6 +48,15 @@ function initPropertiesPanel() {
 
                 <label style="display: block; margin-bottom: 6px; font-size: 11px; font-weight: 600; color: #7f8c8d; text-transform: uppercase; letter-spacing: 0.3px;">Opacity</label>
                 <input type="range" id="prop-opacity" min="0" max="1" step="0.1" value="1" style="width: 100%; height: 6px; cursor: pointer; accent-color: #3498db;" />
+
+                <!-- Border Radius Control (Rectangle only) -->
+                <div id="border-radius-control" class="hidden" style="margin-top: 12px;">
+                    <label style="display: block; margin-bottom: 6px; font-size: 11px; font-weight: 600; color: #7f8c8d; text-transform: uppercase; letter-spacing: 0.3px;">Corner Radius</label>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="range" id="prop-border-radius" min="0" max="50" step="1" value="0" style="flex: 1; height: 6px; cursor: pointer; accent-color: #3498db;" />
+                        <span id="border-radius-value" style="min-width: 35px; font-size: 12px; font-weight: 600; color: #495057;">0</span>
+                    </div>
+                </div>
             </div>
 
             <!-- Transform Section -->
@@ -169,6 +178,19 @@ function setupPropertyListeners() {
     // Opacity
     document.getElementById('prop-opacity').addEventListener('input', (e) => {
         updateActiveObjectProperty('opacity', parseFloat(e.target.value));
+    });
+
+    // Border radius (rectangle only)
+    document.getElementById('prop-border-radius').addEventListener('input', (e) => {
+        const value = parseInt(e.target.value);
+        document.getElementById('border-radius-value').textContent = value;
+        const activeObject = canvas.getActiveObject();
+        if (activeObject && activeObject.type === 'rect') {
+            activeObject.set('rx', value);
+            activeObject.set('ry', value);
+            canvas.requestRenderAll();
+            saveCanvasState();
+        }
     });
 
     // Position
@@ -293,6 +315,16 @@ function updatePropertiesPanel(selectedObjects) {
     if (obj.radius !== undefined) {
         document.getElementById('prop-width').value = Math.round(obj.radius * 2 * (obj.scaleX || 1));
         document.getElementById('prop-height').value = Math.round(obj.radius * 2 * (obj.scaleY || 1));
+    }
+
+    // Show/hide border radius control for rectangles
+    if (obj.type === 'rect') {
+        document.getElementById('border-radius-control').classList.remove('hidden');
+        const rx = obj.rx || 0;
+        document.getElementById('prop-border-radius').value = rx;
+        document.getElementById('border-radius-value').textContent = rx;
+    } else {
+        document.getElementById('border-radius-control').classList.add('hidden');
     }
 
     // Show/hide text properties for text objects and shape/connector text
