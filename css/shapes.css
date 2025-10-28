@@ -108,10 +108,11 @@
 
 /* Grid Background */
 .canvas-grid {
+    background-color: #ffffff !important;
     background-image:
-        linear-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
-    background-size: 20px 20px;
+        linear-gradient(rgba(0, 0, 0, 0.15) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 0, 0, 0.15) 1px, transparent 1px) !important;
+    background-size: 20px 20px !important;
 }
 
 /* Multi-select Box */

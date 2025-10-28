@@ -1,8 +1,10 @@
 // Canvas management - pan, zoom, and interactions
 
 let canvas;
-let isGridVisible = true;
+let isGridVisible = false;
 let currentZoom = 1;
+let snapToGridEnabled = true;
+const GRID_SIZE = 20;
 
 /**
  * Initialize the canvas
@@ -13,7 +15,7 @@ function initCanvas() {
     canvas = new fabric.Canvas('main-canvas', {
         width: window.innerWidth - 550, // Subtract sidebars width
         height: window.innerHeight - 50, // Subtract menu bar height
-        backgroundColor: '#ffffff',
+        backgroundColor: 'transparent',
         selection: true,
         preserveObjectStacking: true
     });
@@ -51,6 +53,9 @@ function setupCanvasEvents() {
 
     // Object movement (disable connectors during drag)
     canvas.on('object:moving', handleObjectMoving);
+
+    // Object scaling (snap to grid during resize)
+    canvas.on('object:scaling', handleObjectScaling);
 
     // Double-click to add text to shapes
     canvas.on('mouse:dblclick', handleDoubleClick);
@@ -193,7 +198,7 @@ function handleObjectRemoved(e) {
 }
 
 /**
- * Handle object moving - disable connector interaction during drag
+ * Handle object moving - disable connector interaction during drag and snap to grid
  */
 function handleObjectMoving(e) {
     const movingObject = e.target;
@@ -203,12 +208,63 @@ function handleObjectMoving(e) {
         return;
     }
 
+    // Apply snap-to-grid if enabled and grid is visible
+    if (snapToGridEnabled && isGridVisible) {
+        // Snap the object's position to the grid
+        movingObject.set({
+            left: snapToGrid(movingObject.left, GRID_SIZE),
+            top: snapToGrid(movingObject.top, GRID_SIZE)
+        });
+        movingObject.setCoords();
+    }
+
     // Disable all connectors temporarily to prevent interference
     canvas.getObjects().forEach(obj => {
         if (obj.isConnector || obj.isConnectorArrow) {
             obj.evented = false;
         }
     });
+}
+
+/**
+ * Handle object scaling - snap dimensions to grid
+ */
+function handleObjectScaling(e) {
+    const scalingObject = e.target;
+
+    // Skip if it's a connector itself or text
+    if (scalingObject.isConnector || scalingObject.isConnectorArrow || scalingObject.type === 'textbox') {
+        return;
+    }
+
+    // Apply snap-to-grid if enabled and grid is visible
+    if (snapToGridEnabled && isGridVisible) {
+        // For circles, snap the radius
+        if (scalingObject.type === 'circle') {
+            const scaledRadius = scalingObject.radius * scalingObject.scaleX;
+            const snappedRadius = snapToGrid(scaledRadius, GRID_SIZE);
+            const newScale = snappedRadius / scalingObject.radius;
+            scalingObject.set({
+                scaleX: newScale,
+                scaleY: newScale  // Keep circle circular
+            });
+        }
+        // For other shapes, snap width and height
+        else if (scalingObject.width && scalingObject.height) {
+            const scaledWidth = scalingObject.width * scalingObject.scaleX;
+            const scaledHeight = scalingObject.height * scalingObject.scaleY;
+
+            const snappedWidth = snapToGrid(scaledWidth, GRID_SIZE);
+            const snappedHeight = snapToGrid(scaledHeight, GRID_SIZE);
+
+            scalingObject.set({
+                scaleX: snappedWidth / scalingObject.width,
+                scaleY: snappedHeight / scalingObject.height
+            });
+        }
+
+        scalingObject.setCoords();
+    }
 }
 
 /**
@@ -466,9 +522,13 @@ function toggleGrid() {
 
     if (isGridVisible) {
         container.classList.add('canvas-grid');
+        console.log('Grid enabled - canvas-grid class added');
     } else {
         container.classList.remove('canvas-grid');
+        console.log('Grid disabled - canvas-grid class removed');
     }
+
+    canvas.requestRenderAll();
 }
 
 /**

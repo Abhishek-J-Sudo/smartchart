@@ -55,10 +55,19 @@ function addShapeToCanvas(shapeType, position = null) {
     const factory = getShapeFactory(shapeType);
 
     // Calculate center position if not provided
-    const pos = position || {
+    let pos = position || {
         left: canvas.width / 2,
         top: canvas.height / 2
     };
+
+    // Snap to grid if enabled and grid is visible
+    if (typeof snapToGridEnabled !== 'undefined' && snapToGridEnabled &&
+        typeof isGridVisible !== 'undefined' && isGridVisible) {
+        pos = {
+            left: snapToGrid(pos.left, 20),
+            top: snapToGrid(pos.top, 20)
+        };
+    }
 
     const shape = factory(pos);
 

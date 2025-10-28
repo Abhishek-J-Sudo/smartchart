@@ -16,8 +16,8 @@ function createRectangle(options = {}) {
     const rect = new fabric.Rect({
         left: options.left || 100,
         top: options.top || 100,
-        width: options.width || 80,
-        height: options.height || 60,
+        width: options.width || 120,  // Changed from 80 to 120 (6 * 20)
+        height: options.height || 80,  // Changed from 60 to 80 (4 * 20)
         fill: options.fill || '#3498db',
         stroke: options.stroke || '#2c3e50',
         strokeWidth: options.strokeWidth || 2,
@@ -38,7 +38,7 @@ function createCircle(options = {}) {
     const circle = new fabric.Circle({
         left: options.left || 100,
         top: options.top || 100,
-        radius: options.radius || 30,
+        radius: options.radius || 40,  // Changed from 30 to 40 (2 * 20)
         fill: options.fill || '#2ecc71',
         stroke: options.stroke || '#2c3e50',
         strokeWidth: options.strokeWidth || 2,
@@ -54,8 +54,8 @@ function createCircle(options = {}) {
  * Create a diamond shape
  */
 function createDiamond(options = {}) {
-    const width = options.width || 70;
-    const height = options.height || 70;
+    const width = options.width || 80;   // Changed from 70 to 80 (4 * 20)
+    const height = options.height || 80;  // Changed from 70 to 80 (4 * 20)
 
     const points = [
         { x: width / 2, y: 0 },
@@ -85,8 +85,8 @@ function createTriangle(options = {}) {
     const triangle = new fabric.Triangle({
         left: options.left || 100,
         top: options.top || 100,
-        width: options.width || 70,
-        height: options.height || 70,
+        width: options.width || 80,   // Changed from 70 to 80 (4 * 20)
+        height: options.height || 80,  // Changed from 70 to 80 (4 * 20)
         fill: options.fill || '#f39c12',
         stroke: options.stroke || '#2c3e50',
         strokeWidth: options.strokeWidth || 2,
@@ -105,7 +105,7 @@ function createTextBox(options = {}) {
     return new fabric.Textbox(options.text || 'Text', {
         left: options.left || 100,
         top: options.top || 100,
-        width: options.width || 200,
+        width: options.width || 200,  // Already a multiple of 20 (10 * 20)
         fontSize: options.fontSize || 16,
         fill: options.fill || '#2c3e50',
         fontFamily: options.fontFamily || 'Arial',
@@ -124,7 +124,7 @@ function createArrow(options = {}) {
         0,    // x1 - relative to line's position
         0,    // y1 - relative to line's position
         0,    // x2 - same X = vertical
-        100   // y2 - 100px down
+        100   // y2 - 100px down (already multiple of 20: 5 * 20)
     ];
 
     return new fabric.Line(points, {
