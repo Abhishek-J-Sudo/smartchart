@@ -609,8 +609,11 @@ function handleMouseUp() {
     // Re-enable all objects when panning ends
     canvas.forEachObject(function (obj) {
       obj.evented = true;
+      // Recalculate object coordinates after viewport transform change
+      obj.setCoords();
     });
 
+    canvas.calcOffset();
     canvas.requestRenderAll();
   }
 }
