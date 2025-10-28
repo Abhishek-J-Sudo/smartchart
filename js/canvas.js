@@ -554,6 +554,16 @@ function handleMouseDown(opt) {
         lastPosX = evt.clientX;
         lastPosY = evt.clientY;
         canvas.selection = false;
+        canvas.defaultCursor = 'grab';
+        canvas.hoverCursor = 'grab';
+
+        // Disable all object interaction during panning
+        canvas.forEachObject(function(obj) {
+            obj.evented = false;
+        });
+
+        opt.e.preventDefault();
+        opt.e.stopPropagation();
     }
 }
 
@@ -562,6 +572,8 @@ function handleMouseDown(opt) {
  */
 function handleMouseMove(opt) {
     if (isPanning) {
+        canvas.defaultCursor = 'grabbing';
+        canvas.hoverCursor = 'grabbing';
         const evt = opt.e;
         const vpt = canvas.viewportTransform;
         vpt[4] += evt.clientX - lastPosX;
@@ -569,6 +581,8 @@ function handleMouseMove(opt) {
         canvas.requestRenderAll();
         lastPosX = evt.clientX;
         lastPosY = evt.clientY;
+        opt.e.preventDefault();
+        opt.e.stopPropagation();
     }
 }
 
@@ -576,15 +590,19 @@ function handleMouseMove(opt) {
  * Handle mouse up
  */
 function handleMouseUp() {
-    isPanning = false;
-    canvas.selection = true;
+    if (isPanning) {
+        isPanning = false;
+        canvas.selection = true;
+        canvas.defaultCursor = 'default';
+        canvas.hoverCursor = 'move';
 
-    // Re-enable connectors when mouse is released
-    canvas.getObjects().forEach(obj => {
-        if (obj.isConnector || obj.isConnectorArrow) {
+        // Re-enable all objects when panning ends
+        canvas.forEachObject(function(obj) {
             obj.evented = true;
-        }
-    });
+        });
+
+        canvas.requestRenderAll();
+    }
 }
 
 /**
