@@ -226,6 +226,13 @@ body {
     border: 1px solid #bdc3c7;
     border-radius: 4px;
     font-size: 14px;
+    transition: border-color 0.2s;
+}
+
+.property-group input:focus,
+.property-group select:focus {
+    outline: none;
+    border-color: #3498db;
 }
 
 .property-group input[type="color"] {
@@ -237,6 +244,34 @@ body {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
+}
+
+/* Button hover effects */
+#bring-forward:hover,
+#send-backward:hover {
+    background-color: #e9ecef !important;
+    border-color: #adb5bd !important;
+    transform: translateY(-1px);
+}
+
+#delete-shape:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(231, 76, 60, 0.4) !important;
+}
+
+.text-format-btn:hover:not([style*="background-color: rgb(52, 152, 219)"]),
+.text-align-btn:hover:not([style*="background-color: rgb(52, 152, 219)"]) {
+    background-color: #e9ecef !important;
+    border-color: #adb5bd !important;
+    transform: translateY(-1px);
+}
+
+/* Input focus effects */
+#properties-panel input[type="number"]:focus,
+#properties-panel select:focus {
+    outline: none;
+    border-color: #3498db !important;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
 }
 
 /* Utility Classes */
