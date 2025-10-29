@@ -915,36 +915,48 @@ class Connector {
         this.waypointCircles.forEach(circle => canvas.remove(circle));
         this.waypointCircles = [];
 
-        // Parse the path to get all segments
+        // Parse the path to get all points
         const segments = this.parsePathSegments(this.path.path);
 
         // Path structure with stubs:
         // [Shape] -> [Stub1] -> [Turn1] -> ... -> [TurnN] -> [Stub2] -> [Shape]
         //
-        // For a simple 2-turn path: Shape -> Stub1 -> Stub2 -> Shape (4 points, 3 segments)
-        // - Segment 0: Shape to Stub1 (stub, don't add waypoint)
-        // - Segment 1: Stub1 to Stub2 (also part of minimal routing, don't add waypoint)
-        // - Segment 2: Stub2 to Shape (stub, don't add waypoint)
-        //
-        // For a complex path with intermediate segments: Shape -> Stub1 -> Turn1 -> Turn2 -> Stub2 -> Shape (6 points, 5 segments)
-        // - Segment 0: Shape to Stub1 (stub, don't add waypoint)
-        // - Segment 1: Stub1 to Turn1 (part of routing, don't add waypoint)
-        // - Segment 2: Turn1 to Turn2 (INTERMEDIATE - add waypoint!) ✓
-        // - Segment 3: Turn2 to Stub2 (part of routing, don't add waypoint)
-        // - Segment 4: Stub2 to Shape (stub, don't add waypoint)
+        // Strategy: Add ONE waypoint on the LONGEST segment between stubs
+        // - Skip first segment (Shape to Stub1)
+        // - Skip last segment (Stub2 to Shape)
+        // - Find the longest segment in between and add waypoint there
+        // This makes the most sense visually - for ] shapes, it's the long vertical line
 
-        // We need at least 6 points (5 segments) to have an intermediate segment
-        if (segments.length < 6) {
+        // We need at least 4 points for any connector
+        if (segments.length < 4) {
             return;
         }
 
-        // Identify intermediate segments
-        // Skip: first 2 segments (shape + first stub) and last 2 segments (last stub + shape)
-        for (let i = 2; i < segments.length - 3; i++) {
+        // Find the longest segment (excluding first and last stub segments)
+        let longestSegmentIndex = -1;
+        let longestSegmentLength = 0;
+
+        for (let i = 1; i < segments.length - 2; i++) {
             const seg = segments[i];
             const nextSeg = segments[i + 1];
 
-            // Calculate midpoint of this segment
+            // Calculate segment length
+            const dx = nextSeg.x - seg.x;
+            const dy = nextSeg.y - seg.y;
+            const length = Math.sqrt(dx * dx + dy * dy);
+
+            if (length > longestSegmentLength) {
+                longestSegmentLength = length;
+                longestSegmentIndex = i;
+            }
+        }
+
+        // If we found a valid segment, add ONE waypoint on it
+        if (longestSegmentIndex >= 0) {
+            const seg = segments[longestSegmentIndex];
+            const nextSeg = segments[longestSegmentIndex + 1];
+
+            // Calculate midpoint of the longest segment
             const midX = (seg.x + nextSeg.x) / 2;
             const midY = (seg.y + nextSeg.y) / 2;
 
@@ -966,7 +978,7 @@ class Connector {
                 visible: false, // Hidden by default, show on hover/selection
                 isWaypointControl: true,
                 connectorId: this.id,
-                segmentIndex: i // Store which segment this controls
+                segmentIndex: longestSegmentIndex // Store which segment this controls
             });
 
             // Drag handler to update the path
