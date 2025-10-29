@@ -1117,6 +1117,42 @@ class Connector {
         });
         this.arrow.setCoords();
 
+        // Update waypoint arrow positions to match the new segment position
+        const seg = currentSegments[segmentIndex];
+        const nextSeg = currentSegments[segmentIndex + 1];
+        const midX = (seg.x + nextSeg.x) / 2;
+        const midY = (seg.y + nextSeg.y) / 2;
+
+        // Update all waypoint controls (both arrows)
+        this.waypointCircles.forEach(control => {
+            if (control.segmentIndex === segmentIndex) {
+                if (isHorizontal) {
+                    // Horizontal segment - update vertical position
+                    control.set({
+                        left: midX,
+                        top: control.text === '▲' ? midY - 15 : midY + 15
+                    });
+                } else if (isVertical) {
+                    // Vertical segment - update horizontal position
+                    control.set({
+                        left: control.text === '◄' ? midX - 15 : midX + 15,
+                        top: midY
+                    });
+                }
+                control.setCoords();
+            }
+        });
+
+        // Update text position if text exists
+        if (this._textObject) {
+            const textMidpoint = this.getPathMidpoint();
+            this._textObject.set({
+                left: textMidpoint.x,
+                top: textMidpoint.y
+            });
+            this._textObject.setCoords();
+        }
+
         canvas.requestRenderAll();
     }
 
