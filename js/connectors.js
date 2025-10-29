@@ -951,7 +951,7 @@ class Connector {
             }
         }
 
-        // If we found a valid segment, add ONE waypoint on it
+        // If we found a valid segment, add waypoint arrows
         if (longestSegmentIndex >= 0) {
             const seg = segments[longestSegmentIndex];
             const nextSeg = segments[longestSegmentIndex + 1];
@@ -960,35 +960,54 @@ class Connector {
             const midX = (seg.x + nextSeg.x) / 2;
             const midY = (seg.y + nextSeg.y) / 2;
 
-            // Create a draggable circle at the midpoint
-            const circle = new fabric.Circle({
-                left: midX,
-                top: midY,
-                radius: 6,
-                fill: '#3498db',
-                stroke: '#ffffff',
-                strokeWidth: 2,
-                originX: 'center',
-                originY: 'center',
-                selectable: true,
-                evented: true,
-                hasControls: false,
-                hasBorders: false,
-                hoverCursor: 'move',
-                visible: false, // Hidden by default, show on hover/selection
-                isWaypointControl: true,
-                connectorId: this.id,
-                segmentIndex: longestSegmentIndex // Store which segment this controls
-            });
+            // Determine if segment is horizontal or vertical
+            const isHorizontal = Math.abs(seg.y - nextSeg.y) < 1;
+            const isVertical = Math.abs(seg.x - nextSeg.x) < 1;
 
-            // Drag handler to update the path
-            circle.on('moving', () => {
-                this.updatePathFromWaypoint(circle);
-            });
-
-            canvas.add(circle);
-            this.waypointCircles.push(circle);
+            // Create directional arrow controls
+            if (isHorizontal) {
+                // Horizontal segment - show up/down arrows
+                this.createArrowControl(midX, midY - 15, '▲', longestSegmentIndex, 'vertical');
+                this.createArrowControl(midX, midY + 15, '▼', longestSegmentIndex, 'vertical');
+            } else if (isVertical) {
+                // Vertical segment - show left/right arrows
+                this.createArrowControl(midX - 15, midY, '◄', longestSegmentIndex, 'horizontal');
+                this.createArrowControl(midX + 15, midY, '►', longestSegmentIndex, 'horizontal');
+            }
         }
+    }
+
+    /**
+     * Create an arrow control for waypoint manipulation
+     */
+    createArrowControl(x, y, arrowSymbol, segmentIndex, direction) {
+        const arrow = new fabric.Text(arrowSymbol, {
+            left: x,
+            top: y,
+            fontSize: 16,
+            fill: '#3498db',
+            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+            originX: 'center',
+            originY: 'center',
+            selectable: true,
+            evented: true,
+            hasControls: false,
+            hasBorders: false,
+            hoverCursor: 'move',
+            visible: false, // Hidden by default, show on hover/selection
+            isWaypointControl: true,
+            connectorId: this.id,
+            segmentIndex: segmentIndex,
+            waypointDirection: direction
+        });
+
+        // Drag handler to update the path
+        arrow.on('moving', () => {
+            this.updatePathFromWaypoint(arrow);
+        });
+
+        canvas.add(arrow);
+        this.waypointCircles.push(arrow);
     }
 
     /**
@@ -1451,6 +1470,7 @@ class Connector {
 
     /**
      * Get midpoint of the connector path for text placement
+     * Returns the center of the longest segment (same as waypoint location)
      */
     getPathMidpoint() {
         if (!this.path) {
@@ -1464,48 +1484,56 @@ class Connector {
             return { x: 0, y: 0 };
         }
 
-        // Calculate total path length and find middle
-        let totalLength = 0;
-        const segments = [];
+        // Parse segments
+        const segments = this.parsePathSegments(pathData);
 
-        for (let i = 1; i < pathData.length; i++) {
-            const prev = pathData[i - 1];
-            const curr = pathData[i];
-
-            // Get coordinates (handle both M and L commands)
-            const x1 = prev[prev.length - 2];
-            const y1 = prev[prev.length - 1];
-            const x2 = curr[curr.length - 2];
-            const y2 = curr[curr.length - 1];
-
-            const segmentLength = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
-            segments.push({
-                x1, y1, x2, y2,
-                length: segmentLength,
-                cumulativeLength: totalLength + segmentLength
-            });
-            totalLength += segmentLength;
+        if (segments.length < 4) {
+            // Fallback: return center of entire path if too short
+            const firstPoint = segments[0];
+            const lastPoint = segments[segments.length - 1];
+            return {
+                x: (firstPoint.x + lastPoint.x) / 2,
+                y: (firstPoint.y + lastPoint.y) / 2
+            };
         }
 
-        // Find segment containing the midpoint
-        const halfLength = totalLength / 2;
-        let midpoint = { x: 0, y: 0 };
+        // Find the longest segment (excluding first and last stub segments)
+        // This matches the logic in createWaypointControls()
+        let longestSegmentIndex = -1;
+        let longestSegmentLength = 0;
 
-        for (const segment of segments) {
-            if (segment.cumulativeLength >= halfLength) {
-                // Interpolate within this segment
-                const segmentStart = segment.cumulativeLength - segment.length;
-                const t = (halfLength - segmentStart) / segment.length;
+        for (let i = 1; i < segments.length - 2; i++) {
+            const seg = segments[i];
+            const nextSeg = segments[i + 1];
 
-                midpoint = {
-                    x: segment.x1 + (segment.x2 - segment.x1) * t,
-                    y: segment.y1 + (segment.y2 - segment.y1) * t
-                };
-                break;
+            const dx = nextSeg.x - seg.x;
+            const dy = nextSeg.y - seg.y;
+            const length = Math.sqrt(dx * dx + dy * dy);
+
+            if (length > longestSegmentLength) {
+                longestSegmentLength = length;
+                longestSegmentIndex = i;
             }
         }
 
-        return midpoint;
+        // Return the midpoint of the longest segment
+        if (longestSegmentIndex >= 0) {
+            const seg = segments[longestSegmentIndex];
+            const nextSeg = segments[longestSegmentIndex + 1];
+
+            return {
+                x: (seg.x + nextSeg.x) / 2,
+                y: (seg.y + nextSeg.y) / 2
+            };
+        }
+
+        // Fallback: return center of entire path
+        const firstPoint = segments[0];
+        const lastPoint = segments[segments.length - 1];
+        return {
+            x: (firstPoint.x + lastPoint.x) / 2,
+            y: (firstPoint.y + lastPoint.y) / 2
+        };
     }
 
     /**
