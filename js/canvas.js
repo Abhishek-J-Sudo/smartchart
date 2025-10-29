@@ -445,6 +445,13 @@ function createShapeTextObject(shape) {
   // When text is edited, update shape's text property for backward compatibility
   itext.on('changed', () => {
     shape.set('text', itext.text);
+
+    // Hide the text object if it's empty (only whitespace or nothing)
+    if (!itext.text || itext.text.trim() === '') {
+      itext.set({ visible: false });
+    } else {
+      itext.set({ visible: true });
+    }
   });
 
   // Exit editing mode when clicking outside
@@ -513,6 +520,13 @@ function createConnectorTextObject(connector) {
   // When text is edited, update connector's text property
   itext.on('changed', () => {
     connector.text = itext.text;
+
+    // Hide the text object if it's empty (only whitespace or nothing)
+    if (!itext.text || itext.text.trim() === '') {
+      itext.set({ visible: false });
+    } else {
+      itext.set({ visible: true });
+    }
   });
 
   // Exit editing mode when clicking outside
