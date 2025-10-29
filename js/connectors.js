@@ -248,38 +248,169 @@ class Connector {
 
     /**
      * Check if a line segment intersects with any shapes (except connected ones)
+     * IMPORTANT: We check the destination shape too, but exclude the connection point area
      */
     doesLineIntersectShapes(x1, y1, x2, y2) {
         const allObjects = canvas.getObjects();
         const MARGIN = 10; // Add 10px margin around shapes
 
         for (let obj of allObjects) {
-            // Skip connectors, connection handles, temp connectors, connector arrows, and the shapes we're connected to
-            if (obj.isConnector || obj.isConnectionHandle || obj.isTempConnector || obj.isConnectorArrow ||
-                obj === this.fromShape || obj === this.toShape) {
+            // Skip connectors, connection handles, temp connectors, connector arrows
+            if (obj.isConnector || obj.isConnectionHandle || obj.isTempConnector || obj.isConnectorArrow) {
                 continue;
             }
+
+            // Skip the source shape completely
+            if (obj === this.fromShape) {
+                continue;
+            }
+
+            // For the destination shape, we need to check if the line passes through its BODY
+            // but allow it to reach the connection point
+            const isDestination = obj === this.toShape;
 
             // Only check actual shapes (objects with an id property)
             if (!obj.id) {
                 continue;
             }
 
-            const bounds = obj.getBoundingRect(true);
+            console.log('Checking collision with shape:', obj.shapeType, obj.type, obj.id, isDestination ? '(DESTINATION)' : '');
 
-            // Expand bounds by margin
-            const left = bounds.left - MARGIN;
-            const right = bounds.left + bounds.width + MARGIN;
-            const top = bounds.top - MARGIN;
-            const bottom = bounds.top + bounds.height + MARGIN;
+            // For diamonds (polygons), check against actual polygon shape with margin
+            if (obj.shapeType === 'diamond' || obj.type === 'polygon') {
+                const intersects = this.lineIntersectsPolygon(x1, y1, x2, y2, obj, MARGIN);
+                console.log('  Diamond/Polygon intersection check:', intersects);
 
-            // Check if line segment intersects with expanded rectangle
-            if (this.lineIntersectsRect(x1, y1, x2, y2, left, top, right, bottom)) {
-                return true;
+                if (intersects) {
+                    console.log('  COLLISION DETECTED - line passes through polygon');
+                    return true;
+                }
+            } else {
+                // For rectangles and other shapes, use bounding rect
+                const bounds = obj.getBoundingRect(true);
+
+                // Expand bounds by margin
+                const left = bounds.left - MARGIN;
+                const right = bounds.left + bounds.width + MARGIN;
+                const top = bounds.top - MARGIN;
+                const bottom = bounds.top + bounds.height + MARGIN;
+
+                // Check if line segment intersects with expanded rectangle
+                const intersects = this.lineIntersectsRect(x1, y1, x2, y2, left, top, right, bottom);
+                console.log('  Rectangle intersection check:', intersects);
+
+                if (intersects) {
+                    console.log('  COLLISION DETECTED - line passes through rectangle');
+                    return true;
+                }
             }
         }
 
         return false;
+    }
+
+    /**
+     * Check if line segment intersects with a polygon shape
+     */
+    lineIntersectsPolygon(x1, y1, x2, y2, polygon, margin = 0) {
+        console.log('    lineIntersectsPolygon called:', {x1, y1, x2, y2, polygon: polygon.id, margin});
+
+        // Get the polygon's actual points in canvas coordinates
+        const matrix = polygon.calcTransformMatrix();
+        const points = polygon.points || [];
+
+        console.log('    Original points:', points);
+
+        const transformedPoints = points.map(point => {
+            return fabric.util.transformPoint(
+                { x: point.x, y: point.y },
+                matrix
+            );
+        });
+
+        console.log('    Transformed points:', transformedPoints);
+
+        // Create expanded polygon by moving each vertex outward
+        const expandedPoints = [];
+        const numPoints = transformedPoints.length;
+
+        // Calculate center of polygon to determine outward direction
+        let centerX = 0, centerY = 0;
+        for (let point of transformedPoints) {
+            centerX += point.x;
+            centerY += point.y;
+        }
+        centerX /= numPoints;
+        centerY /= numPoints;
+
+        console.log('    Polygon center:', {centerX, centerY});
+
+        for (let i = 0; i < numPoints; i++) {
+            const curr = transformedPoints[i];
+
+            // Calculate direction from center to vertex (outward direction)
+            const outwardX = curr.x - centerX;
+            const outwardY = curr.y - centerY;
+            const outwardLen = Math.sqrt(outwardX * outwardX + outwardY * outwardY);
+
+            // Normalize and expand
+            const normalizedX = outwardX / outwardLen;
+            const normalizedY = outwardY / outwardLen;
+
+            // Expand vertex outward by margin
+            expandedPoints.push({
+                x: curr.x + normalizedX * margin,
+                y: curr.y + normalizedY * margin
+            });
+        }
+
+        console.log('    Expanded points (with margin):', expandedPoints);
+
+        // Check if line intersects any edge of the expanded polygon
+        for (let i = 0; i < expandedPoints.length; i++) {
+            const p1 = expandedPoints[i];
+            const p2 = expandedPoints[(i + 1) % expandedPoints.length];
+
+            if (this.lineSegmentsIntersect(x1, y1, x2, y2, p1.x, p1.y, p2.x, p2.y)) {
+                console.log('    COLLISION FOUND with edge', i);
+                return true;
+            }
+        }
+
+        // Also check if line endpoints are inside the expanded polygon
+        const point1Inside = this.pointInPolygon(x1, y1, expandedPoints, 0);
+        const point2Inside = this.pointInPolygon(x2, y2, expandedPoints, 0);
+
+        console.log('    Points inside polygon?', {point1Inside, point2Inside});
+
+        if (point1Inside || point2Inside) {
+            console.log('    COLLISION FOUND - point inside polygon');
+            return true;
+        }
+
+        console.log('    No collision found');
+        return false;
+    }
+
+    /**
+     * Check if a point is inside a polygon using ray casting algorithm
+     */
+    pointInPolygon(x, y, polygonPoints, margin = 0) {
+        let inside = false;
+
+        for (let i = 0, j = polygonPoints.length - 1; i < polygonPoints.length; j = i++) {
+            const xi = polygonPoints[i].x;
+            const yi = polygonPoints[i].y;
+            const xj = polygonPoints[j].x;
+            const yj = polygonPoints[j].y;
+
+            // Expand the check by margin
+            const intersect = ((yi > y - margin) !== (yj > y - margin)) &&
+                (x - margin < (xj - xi) * (y - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+
+        return inside;
     }
 
     /**
@@ -316,14 +447,25 @@ class Connector {
      * Route path around obstacles if needed
      */
     routeAroundObstacles(start, end, fromDir, toDir, defaultPath) {
+        console.log('=== routeAroundObstacles START ===');
+        console.log('From shape:', this.fromShape.id, 'To shape:', this.toShape.id);
+
+        // Debug: List all objects on canvas
+        const allObjects = canvas.getObjects();
+        console.log('Total objects on canvas:', allObjects.length);
+        const shapes = allObjects.filter(obj => obj.id);
+        console.log('Shapes with IDs:', shapes.map(s => ({id: s.id, type: s.type, shapeType: s.shapeType})));
+
         // Parse the default path to get line segments
         const segments = this.parsePathSegments(defaultPath);
+        console.log('Path segments to check:', segments);
 
         // Check each segment for collisions
         let hasCollision = false;
         for (let i = 0; i < segments.length - 1; i++) {
             const seg = segments[i];
             const nextSeg = segments[i + 1];
+            console.log(`Checking segment ${i}: (${seg.x}, ${seg.y}) -> (${nextSeg.x}, ${nextSeg.y})`);
             if (this.doesLineIntersectShapes(seg.x, seg.y, nextSeg.x, nextSeg.y)) {
                 hasCollision = true;
                 console.log('Collision detected!', {seg, nextSeg});
@@ -332,6 +474,7 @@ class Connector {
         }
 
         console.log('routeAroundObstacles:', {hasCollision, segments, defaultPath});
+        console.log('=== routeAroundObstacles END ===');
 
         // If no collision, return default path
         if (!hasCollision) {
@@ -341,31 +484,74 @@ class Connector {
         // Try alternative routing with extended segments
         const OFFSET = 50; // Offset distance to go around obstacles
 
-        // Try routing around by extending outward from source
-        let altPath;
+        // For same-side connections, use a larger offset to ensure clearance
+        const isSameSide = (fromDir === toDir) ||
+                          (this.getBaseDirection(fromDir) === this.getBaseDirection(toDir));
+        const LARGE_OFFSET = isSameSide ? 100 : 50;
+
+        // Try multiple alternative routes
+        const alternatives = [];
+
         if (fromDir === 'top' || fromDir === 'bottom') {
-            // Vertical start - try going further up/down then around
-            const offsetY = fromDir === 'top' ? -OFFSET : OFFSET;
-            altPath = `M ${start.x} ${start.y} L ${start.x} ${start.y + offsetY} L ${end.x} ${start.y + offsetY} L ${end.x} ${end.y}`;
+            // Vertical start (top/bottom) - prioritize going in the connection direction first
+            const offsetY = fromDir === 'top' ? -LARGE_OFFSET : LARGE_OFFSET;
 
-            if (!this.pathHasCollisions(altPath)) return altPath;
+            // Alt 1: Extend in start direction (go up/down first) - HIGHEST PRIORITY
+            alternatives.push(`M ${start.x} ${start.y} L ${start.x} ${start.y + offsetY} L ${end.x} ${start.y + offsetY} L ${end.x} ${end.y}`);
 
-            // Try the other side
-            const altPath2 = `M ${start.x} ${start.y} L ${start.x} ${end.y - offsetY} L ${end.x} ${end.y - offsetY} L ${end.x} ${end.y}`;
-            if (!this.pathHasCollisions(altPath2)) return altPath2;
+            // Alt 2: Extend further in start direction (try more distance)
+            alternatives.push(`M ${start.x} ${start.y} L ${start.x} ${start.y + offsetY * 1.5} L ${end.x} ${start.y + offsetY * 1.5} L ${end.x} ${end.y}`);
+
+            // Alt 3: Go to end level first
+            alternatives.push(`M ${start.x} ${start.y} L ${start.x} ${end.y - offsetY} L ${end.x} ${end.y - offsetY} L ${end.x} ${end.y}`);
+
+            // Alt 4 & 5: Go left/right then down/up - choose order based on relative X position
+            // If end is to the right, try RIGHT first; if end is to the left, try LEFT first
+            if (end.x > start.x) {
+                // End is to the right - try RIGHT first
+                alternatives.push(`M ${start.x} ${start.y} L ${start.x + OFFSET} ${start.y} L ${start.x + OFFSET} ${end.y} L ${end.x} ${end.y}`);
+                alternatives.push(`M ${start.x} ${start.y} L ${start.x - OFFSET} ${start.y} L ${start.x - OFFSET} ${end.y} L ${end.x} ${end.y}`);
+            } else {
+                // End is to the left - try LEFT first
+                alternatives.push(`M ${start.x} ${start.y} L ${start.x - OFFSET} ${start.y} L ${start.x - OFFSET} ${end.y} L ${end.x} ${end.y}`);
+                alternatives.push(`M ${start.x} ${start.y} L ${start.x + OFFSET} ${start.y} L ${start.x + OFFSET} ${end.y} L ${end.x} ${end.y}`);
+            }
         } else {
-            // Horizontal start - try going further left/right then around
-            const offsetX = fromDir === 'left' ? -OFFSET : OFFSET;
-            altPath = `M ${start.x} ${start.y} L ${start.x + offsetX} ${start.y} L ${start.x + offsetX} ${end.y} L ${end.x} ${end.y}`;
+            // Horizontal start (left/right) - prioritize going in the connection direction first
+            const offsetX = fromDir === 'left' ? -LARGE_OFFSET : LARGE_OFFSET;
 
-            if (!this.pathHasCollisions(altPath)) return altPath;
+            // Alt 1: Extend in start direction (go left/right first) - HIGHEST PRIORITY
+            alternatives.push(`M ${start.x} ${start.y} L ${start.x + offsetX} ${start.y} L ${start.x + offsetX} ${end.y} L ${end.x} ${end.y}`);
 
-            // Try the other side
-            const altPath2 = `M ${start.x} ${start.y} L ${end.x - offsetX} ${start.y} L ${end.x - offsetX} ${end.y} L ${end.x} ${end.y}`;
-            if (!this.pathHasCollisions(altPath2)) return altPath2;
+            // Alt 2: Extend further in start direction (try more distance)
+            alternatives.push(`M ${start.x} ${start.y} L ${start.x + offsetX * 1.5} ${start.y} L ${start.x + offsetX * 1.5} ${end.y} L ${end.x} ${end.y}`);
+
+            // Alt 3: Go to end level first
+            alternatives.push(`M ${start.x} ${start.y} L ${end.x - offsetX} ${start.y} L ${end.x - offsetX} ${end.y} L ${end.x} ${end.y}`);
+
+            // Alt 4 & 5: Go up/down then left/right - choose order based on relative Y position
+            // If end is below start, try DOWN first; if end is above start, try UP first
+            if (end.y > start.y) {
+                // End is below - try DOWN first
+                alternatives.push(`M ${start.x} ${start.y} L ${start.x} ${start.y + OFFSET} L ${end.x} ${start.y + OFFSET} L ${end.x} ${end.y}`);
+                alternatives.push(`M ${start.x} ${start.y} L ${start.x} ${start.y - OFFSET} L ${end.x} ${start.y - OFFSET} L ${end.x} ${end.y}`);
+            } else {
+                // End is above - try UP first
+                alternatives.push(`M ${start.x} ${start.y} L ${start.x} ${start.y - OFFSET} L ${end.x} ${start.y - OFFSET} L ${end.x} ${end.y}`);
+                alternatives.push(`M ${start.x} ${start.y} L ${start.x} ${start.y + OFFSET} L ${end.x} ${start.y + OFFSET} L ${end.x} ${end.y}`);
+            }
+        }
+
+        // Try each alternative
+        for (const alt of alternatives) {
+            if (!this.pathHasCollisions(alt)) {
+                console.log('Found collision-free alternative path');
+                return alt;
+            }
         }
 
         // If all alternatives have collisions, return default path (user needs to rearrange shapes)
+        console.warn('All alternative paths have collisions, using default path');
         return defaultPath;
     }
 
@@ -423,12 +609,52 @@ class Connector {
         const fromBaseDir = this.getBaseDirection(fromDir);
         const toBaseDir = this.getBaseDirection(toDir);
 
+        // Add stub/buffer distance from connection points
+        const STUB_LENGTH = 20; // Minimum distance to extend from connection point before turning
+
+        // Calculate start stub point (extend from connection point in its direction)
+        const startStub = { ...start };
+        switch (fromBaseDir) {
+            case 'top':
+                startStub.y = start.y - STUB_LENGTH;
+                break;
+            case 'bottom':
+                startStub.y = start.y + STUB_LENGTH;
+                break;
+            case 'left':
+                startStub.x = start.x - STUB_LENGTH;
+                break;
+            case 'right':
+                startStub.x = start.x + STUB_LENGTH;
+                break;
+        }
+
+        // Calculate end stub point (extend from connection point in its direction)
+        const endStub = { ...end };
+        switch (toBaseDir) {
+            case 'top':
+                endStub.y = end.y - STUB_LENGTH;
+                break;
+            case 'bottom':
+                endStub.y = end.y + STUB_LENGTH;
+                break;
+            case 'left':
+                endStub.x = end.x - STUB_LENGTH;
+                break;
+            case 'right':
+                endStub.x = end.x + STUB_LENGTH;
+                break;
+        }
+
         let pathString;
 
         // Check if shapes are reasonably aligned - use straight line with tolerance
         const alignmentTolerance = 30; // pixels
         const isVerticallyAligned = Math.abs(dx) < alignmentTolerance;
         const isHorizontallyAligned = Math.abs(dy) < alignmentTolerance;
+
+        // Route between the stub points, then add the stubs to the final path
+        let middlePath;
 
         // If reasonably aligned vertically, straighten to use same X coordinate
         if (isVerticallyAligned && (
@@ -437,40 +663,105 @@ class Connector {
         )) {
             // Use average X coordinate for perfectly straight vertical line
             const straightX = (start.x + end.x) / 2;
-            pathString = this.routeAroundObstacles(start, end, fromBaseDir, toBaseDir,
-                `M ${start.x} ${start.y} L ${straightX} ${start.y} L ${straightX} ${end.y} L ${end.x} ${end.y}`);
+            middlePath = this.routeAroundObstacles(startStub, endStub, fromBaseDir, toBaseDir,
+                `M ${startStub.x} ${startStub.y} L ${straightX} ${startStub.y} L ${straightX} ${endStub.y} L ${endStub.x} ${endStub.y}`);
         } else if (isHorizontallyAligned && (
             (fromBaseDir === 'left' && toBaseDir === 'right') ||
             (fromBaseDir === 'right' && toBaseDir === 'left')
         )) {
             // Use average Y coordinate for perfectly straight horizontal line
             const straightY = (start.y + end.y) / 2;
-            pathString = this.routeAroundObstacles(start, end, fromBaseDir, toBaseDir,
-                `M ${start.x} ${start.y} L ${start.x} ${straightY} L ${end.x} ${straightY} L ${end.x} ${end.y}`);
+            middlePath = this.routeAroundObstacles(startStub, endStub, fromBaseDir, toBaseDir,
+                `M ${startStub.x} ${startStub.y} L ${startStub.x} ${straightY} L ${endStub.x} ${straightY} L ${endStub.x} ${endStub.y}`);
         }
         // If connecting opposite sides (horizontal to horizontal or vertical to vertical)
         else if ((fromBaseDir === 'left' || fromBaseDir === 'right') && (toBaseDir === 'left' || toBaseDir === 'right')) {
-            // Both horizontal - use midpoint
-            const midX = start.x + dx / 2;
-            pathString = this.routeAroundObstacles(start, end, fromBaseDir, toBaseDir,
-                `M ${start.x} ${start.y} L ${midX} ${start.y} L ${midX} ${end.y} L ${end.x} ${end.y}`);
+            // Both horizontal
+            // For same-side connections (right-right or left-left), try simple paths first
+            if (fromBaseDir === toBaseDir) {
+                // Try multiple simple path options
+                const simplePaths = [];
+
+                // Option 1: Stay at start Y level as long as possible
+                simplePaths.push(`M ${startStub.x} ${startStub.y} L ${endStub.x} ${startStub.y} L ${endStub.x} ${endStub.y}`);
+
+                // Option 2: Go to end Y level immediately
+                simplePaths.push(`M ${startStub.x} ${startStub.y} L ${startStub.x} ${endStub.y} L ${endStub.x} ${endStub.y}`);
+
+                // Try each simple path
+                let foundSimplePath = false;
+                for (const simplePath of simplePaths) {
+                    if (!this.pathHasCollisions(simplePath)) {
+                        middlePath = simplePath;
+                        foundSimplePath = true;
+                        break;
+                    }
+                }
+
+                if (!foundSimplePath) {
+                    // Use midpoint routing if simple paths have collisions
+                    const midX = (startStub.x + endStub.x) / 2;
+                    middlePath = this.routeAroundObstacles(startStub, endStub, fromBaseDir, toBaseDir,
+                        `M ${startStub.x} ${startStub.y} L ${midX} ${startStub.y} L ${midX} ${endStub.y} L ${endStub.x} ${endStub.y}`);
+                }
+            } else {
+                // Opposite sides (left-right or right-left) - use midpoint
+                const midX = (startStub.x + endStub.x) / 2;
+                middlePath = this.routeAroundObstacles(startStub, endStub, fromBaseDir, toBaseDir,
+                    `M ${startStub.x} ${startStub.y} L ${midX} ${startStub.y} L ${midX} ${endStub.y} L ${endStub.x} ${endStub.y}`);
+            }
         } else if ((fromBaseDir === 'top' || fromBaseDir === 'bottom') && (toBaseDir === 'top' || toBaseDir === 'bottom')) {
-            // Both vertical - use midpoint
-            const midY = start.y + dy / 2;
-            pathString = this.routeAroundObstacles(start, end, fromBaseDir, toBaseDir,
-                `M ${start.x} ${start.y} L ${start.x} ${midY} L ${end.x} ${midY} L ${end.x} ${end.y}`);
+            // Both vertical
+            // For same-side connections (top-top or bottom-bottom), try simple paths first
+            if (fromBaseDir === toBaseDir) {
+                // Try multiple simple path options
+                const simplePaths = [];
+
+                // Option 1: Stay at start X level as long as possible
+                simplePaths.push(`M ${startStub.x} ${startStub.y} L ${startStub.x} ${endStub.y} L ${endStub.x} ${endStub.y}`);
+
+                // Option 2: Go to end X level immediately
+                simplePaths.push(`M ${startStub.x} ${startStub.y} L ${endStub.x} ${startStub.y} L ${endStub.x} ${endStub.y}`);
+
+                // Try each simple path
+                let foundSimplePath = false;
+                for (const simplePath of simplePaths) {
+                    if (!this.pathHasCollisions(simplePath)) {
+                        middlePath = simplePath;
+                        foundSimplePath = true;
+                        break;
+                    }
+                }
+
+                if (!foundSimplePath) {
+                    // Use midpoint routing if simple paths have collisions
+                    const midY = (startStub.y + endStub.y) / 2;
+                    middlePath = this.routeAroundObstacles(startStub, endStub, fromBaseDir, toBaseDir,
+                        `M ${startStub.x} ${startStub.y} L ${startStub.x} ${midY} L ${endStub.x} ${midY} L ${endStub.x} ${endStub.y}`);
+                }
+            } else {
+                // Opposite sides (top-bottom or bottom-top) - use midpoint
+                const midY = (startStub.y + endStub.y) / 2;
+                middlePath = this.routeAroundObstacles(startStub, endStub, fromBaseDir, toBaseDir,
+                    `M ${startStub.x} ${startStub.y} L ${startStub.x} ${midY} L ${endStub.x} ${midY} L ${endStub.x} ${endStub.y}`);
+            }
         } else {
-            // Mixed directions - go out from start direction, then to end
+            // Mixed directions - go out from start stub, then to end stub
             if (fromBaseDir === 'right' || fromBaseDir === 'left') {
                 // Start horizontal, then vertical
-                pathString = this.routeAroundObstacles(start, end, fromBaseDir, toBaseDir,
-                    `M ${start.x} ${start.y} L ${end.x} ${start.y} L ${end.x} ${end.y}`);
+                middlePath = this.routeAroundObstacles(startStub, endStub, fromBaseDir, toBaseDir,
+                    `M ${startStub.x} ${startStub.y} L ${endStub.x} ${startStub.y} L ${endStub.x} ${endStub.y}`);
             } else {
                 // Start vertical, then horizontal
-                pathString = this.routeAroundObstacles(start, end, fromBaseDir, toBaseDir,
-                    `M ${start.x} ${start.y} L ${start.x} ${end.y} L ${end.x} ${end.y}`);
+                middlePath = this.routeAroundObstacles(startStub, endStub, fromBaseDir, toBaseDir,
+                    `M ${startStub.x} ${startStub.y} L ${startStub.x} ${endStub.y} L ${endStub.x} ${endStub.y}`);
             }
         }
+
+        // Prepend the start stub and append the end stub to the routed middle path
+        // Remove the 'M startStub.x startStub.y' from middlePath and add the full path
+        const middlePathWithoutMove = middlePath.replace(/^M\s*[\d.-]+\s+[\d.-]+\s*/, '');
+        pathString = `M ${start.x} ${start.y} L ${startStub.x} ${startStub.y} ${middlePathWithoutMove} L ${end.x} ${end.y}`;
 
         // Calculate angle for arrow based on the incoming direction (toDir)
         // Arrow should point INTO the shape
@@ -1297,7 +1588,7 @@ class ConnectorManager {
     /**
      * Simplified obstacle routing for preview (uses same logic as Connector class)
      */
-    routeAroundObstaclesForPreview(start, end, fromDir, toDir, defaultPath, fromShape, toShape) {
+    routeAroundObstaclesForPreview(start, end, fromDir, toDir, defaultPath, fromShape) {
         // Parse default path to check for collisions
         const segments = this.parsePathSegmentsSimple(defaultPath);
 
@@ -1306,7 +1597,7 @@ class ConnectorManager {
         for (let i = 0; i < segments.length - 1; i++) {
             const seg = segments[i];
             const nextSeg = segments[i + 1];
-            if (this.doesLineIntersectShapesSimple(seg.x, seg.y, nextSeg.x, nextSeg.y, fromShape, toShape)) {
+            if (this.doesLineIntersectShapesSimple(seg.x, seg.y, nextSeg.x, nextSeg.y, fromShape)) {
                 hasCollision = true;
                 break;
             }
@@ -1326,21 +1617,21 @@ class ConnectorManager {
             const offsetY = fromDir === 'top' ? -OFFSET : OFFSET;
             altPath = `M ${start.x} ${start.y} L ${start.x} ${start.y + offsetY} L ${end.x} ${start.y + offsetY} L ${end.x} ${end.y}`;
 
-            if (!this.pathHasCollisionsSimple(altPath, fromShape, toShape)) return altPath;
+            if (!this.pathHasCollisionsSimple(altPath, fromShape)) return altPath;
 
             // Try the other side
             const altPath2 = `M ${start.x} ${start.y} L ${start.x} ${end.y - offsetY} L ${end.x} ${end.y - offsetY} L ${end.x} ${end.y}`;
-            if (!this.pathHasCollisionsSimple(altPath2, fromShape, toShape)) return altPath2;
+            if (!this.pathHasCollisionsSimple(altPath2, fromShape)) return altPath2;
         } else {
             // Horizontal start - try going further left/right then around
             const offsetX = fromDir === 'left' ? -OFFSET : OFFSET;
             altPath = `M ${start.x} ${start.y} L ${start.x + offsetX} ${start.y} L ${start.x + offsetX} ${end.y} L ${end.x} ${end.y}`;
 
-            if (!this.pathHasCollisionsSimple(altPath, fromShape, toShape)) return altPath;
+            if (!this.pathHasCollisionsSimple(altPath, fromShape)) return altPath;
 
             // Try the other side
             const altPath2 = `M ${start.x} ${start.y} L ${end.x - offsetX} ${start.y} L ${end.x - offsetX} ${end.y} L ${end.x} ${end.y}`;
-            if (!this.pathHasCollisionsSimple(altPath2, fromShape, toShape)) return altPath2;
+            if (!this.pathHasCollisionsSimple(altPath2, fromShape)) return altPath2;
         }
 
         // If all alternatives have collisions, return default path
@@ -1372,32 +1663,133 @@ class ConnectorManager {
     /**
      * Check if line intersects with any shapes (simplified)
      */
-    doesLineIntersectShapesSimple(x1, y1, x2, y2, fromShape, toShape) {
+    doesLineIntersectShapesSimple(x1, y1, x2, y2, fromShape) {
         const allObjects = canvas.getObjects();
         const MARGIN = 10;
 
         for (let obj of allObjects) {
-            // Skip connectors, connection handles, and the shapes we're connected to
-            if (obj.isConnector || obj.isConnectionHandle || obj.isTempConnector ||
-                obj === fromShape || obj === toShape) {
+            // Skip connectors, connection handles
+            if (obj.isConnector || obj.isConnectionHandle || obj.isTempConnector) {
                 continue;
             }
+
+            // Skip the source shape
+            if (obj === fromShape) {
+                continue;
+            }
+
+            // Check the destination shape too (don't skip it!)
+            // const isDestination = obj === toShape;
 
             // Only check actual shapes (objects with id)
             if (!obj.id) continue;
 
-            const bounds = obj.getBoundingRect(true);
-            const left = bounds.left - MARGIN;
-            const right = bounds.left + bounds.width + MARGIN;
-            const top = bounds.top - MARGIN;
-            const bottom = bounds.top + bounds.height + MARGIN;
+            // For diamonds (polygons), check against actual polygon shape
+            if (obj.shapeType === 'diamond' || obj.type === 'polygon') {
+                if (this.lineIntersectsPolygonSimple(x1, y1, x2, y2, obj, MARGIN)) {
+                    return true;
+                }
+            } else {
+                // For rectangles and other shapes, use bounding rect
+                const bounds = obj.getBoundingRect(true);
+                const left = bounds.left - MARGIN;
+                const right = bounds.left + bounds.width + MARGIN;
+                const top = bounds.top - MARGIN;
+                const bottom = bounds.top + bounds.height + MARGIN;
 
-            if (this.lineIntersectsRectSimple(x1, y1, x2, y2, left, top, right, bottom)) {
-                return true;
+                if (this.lineIntersectsRectSimple(x1, y1, x2, y2, left, top, right, bottom)) {
+                    return true;
+                }
             }
         }
 
         return false;
+    }
+
+    /**
+     * Check if line segment intersects with a polygon shape (simplified)
+     */
+    lineIntersectsPolygonSimple(x1, y1, x2, y2, polygon, margin = 0) {
+        // Get the polygon's actual points in canvas coordinates
+        const matrix = polygon.calcTransformMatrix();
+        const points = polygon.points || [];
+
+        const transformedPoints = points.map(point => {
+            return fabric.util.transformPoint(
+                { x: point.x, y: point.y },
+                matrix
+            );
+        });
+
+        // Create expanded polygon by moving each vertex outward
+        const expandedPoints = [];
+        const numPoints = transformedPoints.length;
+
+        // Calculate center of polygon to determine outward direction
+        let centerX = 0, centerY = 0;
+        for (let point of transformedPoints) {
+            centerX += point.x;
+            centerY += point.y;
+        }
+        centerX /= numPoints;
+        centerY /= numPoints;
+
+        for (let i = 0; i < numPoints; i++) {
+            const curr = transformedPoints[i];
+
+            // Calculate direction from center to vertex (outward direction)
+            const outwardX = curr.x - centerX;
+            const outwardY = curr.y - centerY;
+            const outwardLen = Math.sqrt(outwardX * outwardX + outwardY * outwardY);
+
+            // Normalize and expand
+            const normalizedX = outwardX / outwardLen;
+            const normalizedY = outwardY / outwardLen;
+
+            // Expand vertex outward by margin
+            expandedPoints.push({
+                x: curr.x + normalizedX * margin,
+                y: curr.y + normalizedY * margin
+            });
+        }
+
+        // Check if line intersects any edge of the expanded polygon
+        for (let i = 0; i < expandedPoints.length; i++) {
+            const p1 = expandedPoints[i];
+            const p2 = expandedPoints[(i + 1) % expandedPoints.length];
+
+            if (this.lineSegmentsIntersectSimple(x1, y1, x2, y2, p1.x, p1.y, p2.x, p2.y)) {
+                return true;
+            }
+        }
+
+        // Also check if line endpoints are inside the expanded polygon
+        if (this.pointInPolygonSimple(x1, y1, expandedPoints, 0) ||
+            this.pointInPolygonSimple(x2, y2, expandedPoints, 0)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if a point is inside a polygon (simplified)
+     */
+    pointInPolygonSimple(x, y, polygonPoints, margin = 0) {
+        let inside = false;
+
+        for (let i = 0, j = polygonPoints.length - 1; i < polygonPoints.length; j = i++) {
+            const xi = polygonPoints[i].x;
+            const yi = polygonPoints[i].y;
+            const xj = polygonPoints[j].x;
+            const yj = polygonPoints[j].y;
+
+            const intersect = ((yi > y - margin) !== (yj > y - margin)) &&
+                (x - margin < (xj - xi) * (y - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+
+        return inside;
     }
 
     /**
@@ -1433,13 +1825,13 @@ class ConnectorManager {
     /**
      * Check if entire path has collisions (simplified)
      */
-    pathHasCollisionsSimple(pathString, fromShape, toShape) {
+    pathHasCollisionsSimple(pathString, fromShape) {
         const segments = this.parsePathSegmentsSimple(pathString);
 
         for (let i = 0; i < segments.length - 1; i++) {
             const seg = segments[i];
             const nextSeg = segments[i + 1];
-            if (this.doesLineIntersectShapesSimple(seg.x, seg.y, nextSeg.x, nextSeg.y, fromShape, toShape)) {
+            if (this.doesLineIntersectShapesSimple(seg.x, seg.y, nextSeg.x, nextSeg.y, fromShape)) {
                 return true;
             }
         }
@@ -1600,7 +1992,7 @@ class ConnectorManager {
 
                 // Apply obstacle routing to ALL paths if we have a target shape
                 if (toShape) {
-                    pathString = this.routeAroundObstaclesForPreview(start, end, fromBaseDir, toBaseDir, pathString, fromShape, toShape);
+                    pathString = this.routeAroundObstaclesForPreview(start, end, fromBaseDir, toBaseDir, pathString, fromShape);
                 }
             } else {
                 // No target - just show simple preview to cursor
