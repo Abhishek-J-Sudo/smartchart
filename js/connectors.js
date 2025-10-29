@@ -1503,21 +1503,23 @@ class ConnectorManager {
         canvas.selection = false;
         canvas.discardActiveObject();
 
-        // Create temporary PATH to show orthogonal routing during drag
+        // Get start position
         const startPos = handle.getCenterPoint();
 
-        const tempPath = new fabric.Path('M 0 0 L 0 0', {
-            stroke: '#3498db',
-            strokeWidth: 2,
-            strokeDashArray: [5, 5],
-            fill: '',
-            selectable: false,
-            evented: false,
-            objectCaching: false,
-            isTempConnector: true
-        });
+        // Create overlay canvas for drawing preview (not affected by viewport transform)
+        const canvasEl = canvas.getElement();
+        const overlayCanvas = document.createElement('canvas');
+        overlayCanvas.id = 'connector-preview-overlay';
+        overlayCanvas.width = canvasEl.width;
+        overlayCanvas.height = canvasEl.height;
+        overlayCanvas.style.position = 'absolute';
+        overlayCanvas.style.left = canvasEl.offsetLeft + 'px';
+        overlayCanvas.style.top = canvasEl.offsetTop + 'px';
+        overlayCanvas.style.pointerEvents = 'none';
+        overlayCanvas.style.zIndex = '1000';
+        canvasEl.parentElement.appendChild(overlayCanvas);
 
-        canvas.add(tempPath);
+        const overlayCtx = overlayCanvas.getContext('2d');
 
         // Track mouse movement
         const moveHandler = (e) => {
@@ -1611,16 +1613,37 @@ class ConnectorManager {
                 }
             }
 
-            tempPath.set({
-                path: fabric.util.parsePath(pathString)
-            });
-            tempPath.setCoords();
+            // Clear overlay canvas
+            overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 
-            canvas.requestRenderAll();
+            // Draw path on overlay with viewport transform applied
+            const vpt = canvas.viewportTransform;
+            overlayCtx.save();
+            overlayCtx.transform(vpt[0], vpt[1], vpt[2], vpt[3], vpt[4], vpt[5]);
+
+            // Parse path and draw it
+            const segments = this.parsePathSegmentsSimple(pathString);
+            if (segments.length > 0) {
+                overlayCtx.strokeStyle = '#3498db';
+                overlayCtx.lineWidth = 2;
+                overlayCtx.setLineDash([5, 5]);
+                overlayCtx.beginPath();
+                overlayCtx.moveTo(segments[0].x, segments[0].y);
+                for (let i = 1; i < segments.length; i++) {
+                    overlayCtx.lineTo(segments[i].x, segments[i].y);
+                }
+                overlayCtx.stroke();
+            }
+
+            overlayCtx.restore();
         };
 
         const upHandler = (e) => {
-            canvas.remove(tempPath);
+            // Remove overlay canvas
+            if (overlayCanvas && overlayCanvas.parentElement) {
+                overlayCanvas.parentElement.removeChild(overlayCanvas);
+            }
+
             canvas.off('mouse:move', moveHandler);
             canvas.off('mouse:up', upHandler);
 
