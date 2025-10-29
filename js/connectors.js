@@ -1064,8 +1064,26 @@ class Connector {
             pathString += ` L ${currentSegments[i].x} ${currentSegments[i].y}`;
         }
 
-        // Update the path
-        this.path.set({ path: fabric.util.parsePath(pathString) });
+        // Update the path - need to properly reinitialize to recalculate bounding box
+        const parsedPath = fabric.util.parsePath(pathString);
+        this.path.initialize(parsedPath, {
+            stroke: this.path.stroke,
+            strokeWidth: this.path.strokeWidth,
+            fill: this.path.fill,
+            selectable: this.path.selectable,
+            hasControls: this.path.hasControls,
+            hasBorders: this.path.hasBorders,
+            lockMovementX: this.path.lockMovementX,
+            lockMovementY: this.path.lockMovementY,
+            lockRotation: this.path.lockRotation,
+            lockScalingX: this.path.lockScalingX,
+            lockScalingY: this.path.lockScalingY,
+            hoverCursor: this.path.hoverCursor,
+            moveCursor: this.path.moveCursor,
+            perPixelTargetFind: this.path.perPixelTargetFind,
+            targetFindTolerance: this.path.targetFindTolerance,
+            connectorId: this.id
+        });
         this.path.setCoords();
 
         // Update arrow position (last segment)
@@ -1124,8 +1142,26 @@ class Connector {
             pathString = this.applyWaypointAdjustments(pathString);
         }
 
-        // Update path
-        this.path.set({ path: fabric.util.parsePath(pathString) });
+        // Update path - need to properly reinitialize to recalculate bounding box
+        const parsedPath = fabric.util.parsePath(pathString);
+        this.path.initialize(parsedPath, {
+            stroke: this.path.stroke,
+            strokeWidth: this.path.strokeWidth,
+            fill: this.path.fill,
+            selectable: this.path.selectable,
+            hasControls: this.path.hasControls,
+            hasBorders: this.path.hasBorders,
+            lockMovementX: this.path.lockMovementX,
+            lockMovementY: this.path.lockMovementY,
+            lockRotation: this.path.lockRotation,
+            lockScalingX: this.path.lockScalingX,
+            lockScalingY: this.path.lockScalingY,
+            hoverCursor: this.path.hoverCursor,
+            moveCursor: this.path.moveCursor,
+            perPixelTargetFind: this.path.perPixelTargetFind,
+            targetFindTolerance: this.path.targetFindTolerance,
+            connectorId: this.id
+        });
         this.path.setCoords();
 
         // Recalculate arrow position from the adjusted path
