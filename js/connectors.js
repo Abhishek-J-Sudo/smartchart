@@ -43,6 +43,10 @@ class Connector {
         // Store the chosen route to keep it stable when shapes move
         this.lockedRoute = options.lockedRoute || null;
 
+        // Store manual waypoint adjustments (offsets from automatic path)
+        // Format: { segmentIndex: { offsetX: number, offsetY: number } }
+        this.waypointAdjustments = options.waypointAdjustments || {};
+
         // Text label
         this.text = options.text || '';
         this._textObject = null;
@@ -67,6 +71,9 @@ class Connector {
             toPoint: this.toPoint,
             pathData: pathData
         });
+
+        // Store the original automatic path
+        this.originalPathString = pathData.pathString;
 
         // Create path
         this.path = new fabric.Path(pathData.pathString, {
@@ -105,6 +112,9 @@ class Connector {
         // Send to back
         this.path.sendToBack();
         this.arrow.sendToBack();
+
+        // Create waypoint controls for intermediate segments
+        this.createWaypointControls();
     }
 
     /**
@@ -897,6 +907,191 @@ class Connector {
     }
 
     /**
+     * Create waypoint controls for intermediate segments
+     * Only segments NOT directly connected to shapes get waypoints
+     */
+    createWaypointControls() {
+        // Remove existing waypoint circles
+        this.waypointCircles.forEach(circle => canvas.remove(circle));
+        this.waypointCircles = [];
+
+        // Parse the path to get all segments
+        const segments = this.parsePathSegments(this.path.path);
+
+        // Path structure with stubs:
+        // [Shape] -> [Stub1] -> [Turn1] -> ... -> [TurnN] -> [Stub2] -> [Shape]
+        //
+        // For a simple 2-turn path: Shape -> Stub1 -> Stub2 -> Shape (4 points, 3 segments)
+        // - Segment 0: Shape to Stub1 (stub, don't add waypoint)
+        // - Segment 1: Stub1 to Stub2 (also part of minimal routing, don't add waypoint)
+        // - Segment 2: Stub2 to Shape (stub, don't add waypoint)
+        //
+        // For a complex path with intermediate segments: Shape -> Stub1 -> Turn1 -> Turn2 -> Stub2 -> Shape (6 points, 5 segments)
+        // - Segment 0: Shape to Stub1 (stub, don't add waypoint)
+        // - Segment 1: Stub1 to Turn1 (part of routing, don't add waypoint)
+        // - Segment 2: Turn1 to Turn2 (INTERMEDIATE - add waypoint!) ✓
+        // - Segment 3: Turn2 to Stub2 (part of routing, don't add waypoint)
+        // - Segment 4: Stub2 to Shape (stub, don't add waypoint)
+
+        // We need at least 6 points (5 segments) to have an intermediate segment
+        if (segments.length < 6) {
+            return;
+        }
+
+        // Identify intermediate segments
+        // Skip: first 2 segments (shape + first stub) and last 2 segments (last stub + shape)
+        for (let i = 2; i < segments.length - 3; i++) {
+            const seg = segments[i];
+            const nextSeg = segments[i + 1];
+
+            // Calculate midpoint of this segment
+            const midX = (seg.x + nextSeg.x) / 2;
+            const midY = (seg.y + nextSeg.y) / 2;
+
+            // Create a draggable circle at the midpoint
+            const circle = new fabric.Circle({
+                left: midX,
+                top: midY,
+                radius: 6,
+                fill: '#3498db',
+                stroke: '#ffffff',
+                strokeWidth: 2,
+                originX: 'center',
+                originY: 'center',
+                selectable: true,
+                evented: true,
+                hasControls: false,
+                hasBorders: false,
+                hoverCursor: 'move',
+                visible: false, // Hidden by default, show on hover/selection
+                isWaypointControl: true,
+                connectorId: this.id,
+                segmentIndex: i // Store which segment this controls
+            });
+
+            // Drag handler to update the path
+            circle.on('moving', () => {
+                this.updatePathFromWaypoint(circle);
+            });
+
+            canvas.add(circle);
+            this.waypointCircles.push(circle);
+        }
+    }
+
+    /**
+     * Parse path data array to get segment coordinates
+     */
+    parsePathSegments(pathData) {
+        const segments = [];
+
+        for (let i = 0; i < pathData.length; i++) {
+            const cmd = pathData[i];
+            if (cmd[0] === 'M' || cmd[0] === 'L') {
+                segments.push({
+                    x: cmd[1],
+                    y: cmd[2]
+                });
+            }
+        }
+
+        return segments;
+    }
+
+    /**
+     * Update path when a waypoint is dragged
+     */
+    updatePathFromWaypoint(waypointCircle) {
+        // Get the waypoint position
+        const waypointPos = waypointCircle.getCenterPoint();
+        const segmentIndex = waypointCircle.segmentIndex;
+
+        // Get the ORIGINAL automatic path (without any adjustments)
+        const originalSegments = this.parsePathSegmentsFromString(this.originalPathString);
+
+        // Get current displayed segments
+        const currentSegments = this.parsePathSegments(this.path.path);
+
+        // Determine if this is a horizontal or vertical segment in the ORIGINAL path
+        const origCurrentSeg = originalSegments[segmentIndex];
+        const origNextSeg = originalSegments[segmentIndex + 1];
+
+        const isHorizontal = Math.abs(origCurrentSeg.y - origNextSeg.y) < 1;
+        const isVertical = Math.abs(origCurrentSeg.x - origNextSeg.x) < 1;
+
+        // Calculate offset from the ORIGINAL path
+        if (isHorizontal) {
+            // Horizontal segment - can be dragged vertically
+            const originalY = origCurrentSeg.y;
+            const newY = waypointPos.y;
+            this.waypointAdjustments[segmentIndex] = {
+                offsetX: 0,
+                offsetY: newY - originalY
+            };
+
+            // Update current segments
+            currentSegments[segmentIndex].y = newY;
+            currentSegments[segmentIndex + 1].y = newY;
+        } else if (isVertical) {
+            // Vertical segment - can be dragged horizontally
+            const originalX = origCurrentSeg.x;
+            const newX = waypointPos.x;
+            this.waypointAdjustments[segmentIndex] = {
+                offsetX: newX - originalX,
+                offsetY: 0
+            };
+
+            // Update current segments
+            currentSegments[segmentIndex].x = newX;
+            currentSegments[segmentIndex + 1].x = newX;
+        }
+
+        // Rebuild the path string from current segments
+        let pathString = `M ${currentSegments[0].x} ${currentSegments[0].y}`;
+        for (let i = 1; i < currentSegments.length; i++) {
+            pathString += ` L ${currentSegments[i].x} ${currentSegments[i].y}`;
+        }
+
+        // Update the path
+        this.path.set({ path: fabric.util.parsePath(pathString) });
+        this.path.setCoords();
+
+        // Update arrow position (last segment)
+        const endPoint = currentSegments[currentSegments.length - 1];
+        const beforeEnd = currentSegments[currentSegments.length - 2];
+        const angle = Math.atan2(endPoint.y - beforeEnd.y, endPoint.x - beforeEnd.x) * 180 / Math.PI;
+
+        this.arrow.set({
+            left: endPoint.x,
+            top: endPoint.y,
+            angle: angle
+        });
+        this.arrow.setCoords();
+
+        canvas.requestRenderAll();
+    }
+
+    /**
+     * Show waypoint controls (on hover or selection)
+     */
+    showWaypointControls() {
+        this.waypointCircles.forEach(circle => {
+            circle.set({ visible: true });
+        });
+        canvas.requestRenderAll();
+    }
+
+    /**
+     * Hide waypoint controls
+     */
+    hideWaypointControls() {
+        this.waypointCircles.forEach(circle => {
+            circle.set({ visible: false });
+        });
+        canvas.requestRenderAll();
+    }
+
+    /**
      * Update connector (when shapes move)
      */
     update() {
@@ -906,17 +1101,38 @@ class Connector {
 
         const pathData = this.calculatePath();
 
+        // Store the original automatic path for reference
+        this.originalPathString = pathData.pathString;
+
+        // Parse the new path
+        let pathString = pathData.pathString;
+
+        // Apply any stored waypoint adjustments
+        if (Object.keys(this.waypointAdjustments).length > 0) {
+            pathString = this.applyWaypointAdjustments(pathString);
+        }
+
         // Update path
-        this.path.set({ path: fabric.util.parsePath(pathData.pathString) });
+        this.path.set({ path: fabric.util.parsePath(pathString) });
         this.path.setCoords();
 
-        // Update arrow
-        this.arrow.set({
-            left: pathData.endPoint.x,
-            top: pathData.endPoint.y,
-            angle: pathData.endAngle
-        });
-        this.arrow.setCoords();
+        // Recalculate arrow position from the adjusted path
+        const segments = this.parsePathSegments(this.path.path);
+        if (segments.length >= 2) {
+            const endPoint = segments[segments.length - 1];
+            const beforeEnd = segments[segments.length - 2];
+            const angle = Math.atan2(endPoint.y - beforeEnd.y, endPoint.x - beforeEnd.x) * 180 / Math.PI;
+
+            this.arrow.set({
+                left: endPoint.x,
+                top: endPoint.y,
+                angle: angle
+            });
+            this.arrow.setCoords();
+        }
+
+        // Recreate waypoint controls for the new path
+        this.createWaypointControls();
 
         // Update text position if text exists
         if (this._textObject) {
@@ -927,6 +1143,67 @@ class Connector {
             });
             this._textObject.setCoords();
         }
+    }
+
+    /**
+     * Apply stored waypoint adjustments to a path string
+     */
+    applyWaypointAdjustments(pathString) {
+        const segments = this.parsePathSegmentsFromString(pathString);
+
+        // Apply each stored adjustment
+        for (const segmentIndex in this.waypointAdjustments) {
+            const index = parseInt(segmentIndex);
+            const adjustment = this.waypointAdjustments[index];
+
+            // Check if this segment still exists in the new path
+            if (index < segments.length - 1) {
+                const currentSeg = segments[index];
+                const nextSeg = segments[index + 1];
+
+                const isHorizontal = Math.abs(currentSeg.y - nextSeg.y) < 1;
+                const isVertical = Math.abs(currentSeg.x - nextSeg.x) < 1;
+
+                // Apply the stored offset
+                if (isHorizontal && adjustment.offsetY !== 0) {
+                    segments[index].y += adjustment.offsetY;
+                    segments[index + 1].y += adjustment.offsetY;
+                } else if (isVertical && adjustment.offsetX !== 0) {
+                    segments[index].x += adjustment.offsetX;
+                    segments[index + 1].x += adjustment.offsetX;
+                }
+            }
+        }
+
+        // Rebuild the path string
+        let adjustedPathString = `M ${segments[0].x} ${segments[0].y}`;
+        for (let i = 1; i < segments.length; i++) {
+            adjustedPathString += ` L ${segments[i].x} ${segments[i].y}`;
+        }
+
+        return adjustedPathString;
+    }
+
+    /**
+     * Parse SVG path string to get segment coordinates (from string format)
+     */
+    parsePathSegmentsFromString(pathString) {
+        const segments = [];
+        const commands = pathString.match(/[ML]\s*[\d.-]+\s+[\d.-]+/g);
+
+        if (commands) {
+            for (let cmd of commands) {
+                const coords = cmd.match(/[\d.-]+/g);
+                if (coords && coords.length >= 2) {
+                    segments.push({
+                        x: parseFloat(coords[0]),
+                        y: parseFloat(coords[1])
+                    });
+                }
+            }
+        }
+
+        return segments;
     }
 
     /**
@@ -1060,11 +1337,16 @@ class Connector {
             if (!canvas.getActiveObject() || canvas.getActiveObject() !== this.path) {
                 this.highlight(false);
             }
+            this.showWaypointControls();
         });
 
         this.path.on('mouseout', () => {
             if (!canvas.getActiveObject() || canvas.getActiveObject() !== this.path) {
                 this.unhighlight();
+            }
+            // Only hide if not selected
+            if (!canvas.getActiveObject() || canvas.getActiveObject().connectorId !== this.id) {
+                this.hideWaypointControls();
             }
         });
 
@@ -1072,12 +1354,26 @@ class Connector {
             if (!canvas.getActiveObject() || (canvas.getActiveObject() !== this.path && canvas.getActiveObject() !== this.arrow)) {
                 this.highlight(false);
             }
+            this.showWaypointControls();
         });
 
         this.arrow.on('mouseout', () => {
             if (!canvas.getActiveObject() || (canvas.getActiveObject() !== this.path && canvas.getActiveObject() !== this.arrow)) {
                 this.unhighlight();
             }
+            // Only hide if not selected
+            if (!canvas.getActiveObject() || canvas.getActiveObject().connectorId !== this.id) {
+                this.hideWaypointControls();
+            }
+        });
+
+        // Show waypoints when connector is selected
+        this.path.on('selected', () => {
+            this.showWaypointControls();
+        });
+
+        this.arrow.on('selected', () => {
+            this.showWaypointControls();
         });
     }
 
@@ -1181,7 +1477,8 @@ class Connector {
             strokeWidth: this.strokeWidth,
             arrowSize: this.arrowSize,
             lockedRoute: this.lockedRoute,
-            text: this.text || '' // Include text in serialization
+            text: this.text || '', // Include text in serialization
+            waypointAdjustments: this.waypointAdjustments // Include waypoint adjustments
         };
     }
 }
@@ -2143,7 +2440,8 @@ class ConnectorManager {
                     waypoints: connectorData.waypoints,
                     strokeColor: connectorData.strokeColor,
                     strokeWidth: connectorData.strokeWidth,
-                    arrowSize: connectorData.arrowSize
+                    arrowSize: connectorData.arrowSize,
+                    waypointAdjustments: connectorData.waypointAdjustments || {}
                 });
             }
         });
