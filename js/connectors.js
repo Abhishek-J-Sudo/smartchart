@@ -1382,6 +1382,8 @@ class Connector {
                 fill: '#3498db',
                 stroke: '#3498db'
             });
+            // Show endpoint handles for touch point swapping
+            this.showEndpointHandles();
         } else {
             // Hover highlight - subtle
             this.path.set({
@@ -1408,7 +1410,252 @@ class Connector {
             fill: this.arrow._originalFill || this.strokeColor,
             stroke: this.arrow._originalStroke || this.strokeColor
         });
+        // Hide endpoint handles when deselected
+        this.hideEndpointHandles();
         canvas.requestRenderAll();
+    }
+
+    /**
+     * Show endpoint handles for swapping touch points
+     */
+    showEndpointHandles() {
+        this.hideEndpointHandles();
+        this.endpointHandles = [];
+
+        // Get start and end points
+        const startPoint = this.getFixedConnectionPoint(this.fromShape, this.fromPoint);
+        const endPoint = this.getFixedConnectionPoint(this.toShape, this.toPoint);
+
+        // Create handle for start point
+        const startHandle = new fabric.Circle({
+            left: startPoint.x,
+            top: startPoint.y,
+            radius: 6,
+            fill: '#3498db',
+            stroke: 'white',
+            strokeWidth: 2,
+            originX: 'center',
+            originY: 'center',
+            selectable: false,
+            evented: true,
+            hasControls: false,
+            hasBorders: false,
+            hoverCursor: 'grab',
+            isEndpointHandle: true,
+            connectorId: this.id,
+            isStartPoint: true
+        });
+
+        // Create handle for end point
+        const endHandle = new fabric.Circle({
+            left: endPoint.x,
+            top: endPoint.y,
+            radius: 6,
+            fill: '#3498db',
+            stroke: 'white',
+            strokeWidth: 2,
+            originX: 'center',
+            originY: 'center',
+            selectable: false,
+            evented: true,
+            hasControls: false,
+            hasBorders: false,
+            hoverCursor: 'grab',
+            isEndpointHandle: true,
+            connectorId: this.id,
+            isStartPoint: false
+        });
+
+        // Add drag functionality
+        startHandle.on('mousedown', (e) => {
+            this.startEndpointDrag(startHandle, this.fromShape, true);
+        });
+
+        endHandle.on('mousedown', (e) => {
+            this.startEndpointDrag(endHandle, this.toShape, false);
+        });
+
+        canvas.add(startHandle);
+        canvas.add(endHandle);
+
+        this.endpointHandles = [startHandle, endHandle];
+        canvas.requestRenderAll();
+    }
+
+    /**
+     * Hide endpoint handles
+     */
+    hideEndpointHandles() {
+        if (this.endpointHandles) {
+            this.endpointHandles.forEach(handle => canvas.remove(handle));
+            this.endpointHandles = [];
+            canvas.requestRenderAll();
+        }
+    }
+
+    /**
+     * Start dragging an endpoint to swap touch points
+     */
+    startEndpointDrag(handle, shape, isStartPoint) {
+        const manager = getConnectorManager();
+
+        // Disable canvas selection
+        canvas.selection = false;
+        canvas.defaultCursor = 'grabbing';
+        handle.set('hoverCursor', 'grabbing');
+
+        // Show all available touch points on the shape
+        const touchPoints = this.getAllTouchPoints(shape);
+        const touchPointHandles = [];
+
+        touchPoints.forEach(point => {
+            const bounds = shape.getBoundingRect(true);
+            const actualPos = {
+                x: bounds.left + bounds.width * point.x,
+                y: bounds.top + bounds.height * point.y
+            };
+
+            const pointHandle = new fabric.Circle({
+                left: actualPos.x,
+                top: actualPos.y,
+                radius: 8,
+                fill: 'rgba(52, 152, 219, 0.3)',
+                stroke: '#3498db',
+                strokeWidth: 2,
+                originX: 'center',
+                originY: 'center',
+                selectable: false,
+                evented: false,
+                hasControls: false,
+                hasBorders: false,
+                isTouchPointPreview: true,
+                touchPointData: point
+            });
+
+            canvas.add(pointHandle);
+            touchPointHandles.push(pointHandle);
+        });
+
+        // Track the current nearest touch point
+        let nearestTouchPoint = isStartPoint ? this.fromPoint : this.toPoint;
+
+        const moveHandler = (e) => {
+            const pointer = canvas.getPointer(e.e);
+
+            // Move the handle
+            handle.set({
+                left: pointer.x,
+                top: pointer.y
+            });
+
+            // Find nearest touch point
+            let minDist = Infinity;
+            let nearest = null;
+
+            touchPoints.forEach(point => {
+                const bounds = shape.getBoundingRect(true);
+                const actualPos = {
+                    x: bounds.left + bounds.width * point.x,
+                    y: bounds.top + bounds.height * point.y
+                };
+
+                const dist = Math.sqrt(
+                    Math.pow(pointer.x - actualPos.x, 2) +
+                    Math.pow(pointer.y - actualPos.y, 2)
+                );
+
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearest = point;
+                }
+            });
+
+            // Highlight the nearest touch point
+            if (nearest && minDist < 50) {
+                nearestTouchPoint = nearest;
+
+                // Update touch point handle visualization
+                touchPointHandles.forEach(th => {
+                    if (th.touchPointData === nearest) {
+                        th.set({
+                            fill: '#3498db',
+                            radius: 10
+                        });
+                    } else {
+                        th.set({
+                            fill: 'rgba(52, 152, 219, 0.3)',
+                            radius: 8
+                        });
+                    }
+                });
+            }
+
+            canvas.requestRenderAll();
+        };
+
+        const upHandler = (e) => {
+            // Clean up
+            canvas.off('mouse:move', moveHandler);
+            canvas.off('mouse:up', upHandler);
+            canvas.selection = true;
+            canvas.defaultCursor = 'default';
+
+            // Remove touch point preview handles
+            touchPointHandles.forEach(th => canvas.remove(th));
+
+            // Update the connector's touch point
+            if (nearestTouchPoint) {
+                if (isStartPoint) {
+                    this.fromPoint = nearestTouchPoint;
+                } else {
+                    this.toPoint = nearestTouchPoint;
+                }
+
+                // Update the connector visual
+                this.update();
+
+                // Update endpoint handles to new positions
+                this.showEndpointHandles();
+            }
+
+            canvas.requestRenderAll();
+        };
+
+        canvas.on('mouse:move', moveHandler);
+        canvas.on('mouse:up', upHandler);
+    }
+
+    /**
+     * Get all available touch points for a shape
+     */
+    getAllTouchPoints(shape) {
+        if (shape.shapeType === 'diamond') {
+            return [
+                { x: 0.5, y: 0 },    // top
+                { x: 1, y: 0.5 },    // right
+                { x: 0.5, y: 1 },    // bottom
+                { x: 0, y: 0.5 }     // left
+            ];
+        } else {
+            return [
+                // Top (3 points)
+                { x: 0.25, y: 0 },
+                { x: 0.5, y: 0 },
+                { x: 0.75, y: 0 },
+                // Right (3 points)
+                { x: 1, y: 0.25 },
+                { x: 1, y: 0.5 },
+                { x: 1, y: 0.75 },
+                // Bottom (3 points)
+                { x: 0.25, y: 1 },
+                { x: 0.5, y: 1 },
+                { x: 0.75, y: 1 },
+                // Left (3 points)
+                { x: 0, y: 0.25 },
+                { x: 0, y: 0.5 },
+                { x: 0, y: 0.75 }
+            ];
+        }
     }
 
     /**
@@ -1489,6 +1736,9 @@ class Connector {
 
         // Cleanup waypoint circles
         this.waypointCircles.forEach(circle => canvas.remove(circle));
+
+        // Remove endpoint handles
+        this.hideEndpointHandles();
 
         // Remove text object if it exists
         if (this._textObject) {
