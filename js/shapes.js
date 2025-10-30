@@ -13,14 +13,17 @@ const SHAPE_TYPES = {
  * Create a rectangle shape
  */
 function createRectangle(options = {}) {
+  // Get theme colors if not explicitly provided
+  const themeColors = typeof getDefaultShapeColors === 'function' ? getDefaultShapeColors('rectangle') : null;
+
   const rect = new fabric.Rect({
     left: options.left || 100,
     top: options.top || 100,
     width: options.width || 240, // Process box
     height: options.height || 80,
-    fill: options.fill || '#81afe4', // Modern blue
-    stroke: options.stroke || '#2E5C8A', // Darker blue border
-    strokeWidth: options.strokeWidth || 2.5,
+    fill: options.fill || (themeColors ? themeColors.fill : '#81afe4'), // Modern blue
+    stroke: options.stroke || (themeColors ? themeColors.stroke : '#2E5C8A'), // Darker blue border
+    strokeWidth: options.strokeWidth || (themeColors ? themeColors.strokeWidth : 2.5),
     strokeUniform: true, // Keep stroke width constant when scaling
     rx: options.rx !== undefined ? options.rx : 10, // Slightly rounded corners by default
     ry: options.ry !== undefined ? options.ry : 10,
@@ -42,13 +45,16 @@ function createRectangle(options = {}) {
  * Create a circle shape
  */
 function createCircle(options = {}) {
+  // Get theme colors if not explicitly provided
+  const themeColors = typeof getDefaultShapeColors === 'function' ? getDefaultShapeColors('circle') : null;
+
   const circle = new fabric.Circle({
     left: options.left || 100,
     top: options.top || 100,
     radius: options.radius || 50, // Start/End terminator
-    fill: options.fill || '#50C878', // Emerald green
-    stroke: options.stroke || '#2D7A4F', // Darker green border
-    strokeWidth: options.strokeWidth || 2.5,
+    fill: options.fill || (themeColors ? themeColors.fill : '#50C878'), // Emerald green
+    stroke: options.stroke || (themeColors ? themeColors.stroke : '#2D7A4F'), // Darker green border
+    strokeWidth: options.strokeWidth || (themeColors ? themeColors.strokeWidth : 2.5),
     strokeUniform: true, // Keep stroke width constant when scaling
     id: generateId(),
     shapeType: SHAPE_TYPES.CIRCLE,
@@ -68,6 +74,9 @@ function createCircle(options = {}) {
  * Create a diamond shape
  */
 function createDiamond(options = {}) {
+  // Get theme colors if not explicitly provided
+  const themeColors = typeof getDefaultShapeColors === 'function' ? getDefaultShapeColors('diamond') : null;
+
   const width = options.width || 120; // Decision diamond
   const height = options.height || 120;
 
@@ -81,9 +90,9 @@ function createDiamond(options = {}) {
   const diamond = new fabric.Polygon(points, {
     left: options.left || 100,
     top: options.top || 100,
-    fill: options.fill || '#ea6b62', // Warm orange/amber
-    stroke: options.stroke || '#cc3e2e', // Darker orange border
-    strokeWidth: options.strokeWidth || 2.5,
+    fill: options.fill || (themeColors ? themeColors.fill : '#ea6b62'), // Warm orange/amber
+    stroke: options.stroke || (themeColors ? themeColors.stroke : '#cc3e2e'), // Darker orange border
+    strokeWidth: options.strokeWidth || (themeColors ? themeColors.strokeWidth : 2.5),
     strokeUniform: true, // Keep stroke width constant when scaling
     id: generateId(),
     shapeType: SHAPE_TYPES.DIAMOND,
@@ -103,14 +112,17 @@ function createDiamond(options = {}) {
  * Create a triangle shape
  */
 function createTriangle(options = {}) {
+  // Get theme colors if not explicitly provided
+  const themeColors = typeof getDefaultShapeColors === 'function' ? getDefaultShapeColors('triangle') : null;
+
   const triangle = new fabric.Triangle({
     left: options.left || 100,
     top: options.top || 100,
     width: options.width || 120, // Data/Document shape
     height: options.height || 100,
-    fill: options.fill || '#A78BFA', // Purple/Lavender
-    stroke: options.stroke || '#7C5CBF', // Darker purple border
-    strokeWidth: options.strokeWidth || 2.5,
+    fill: options.fill || (themeColors ? themeColors.fill : '#A78BFA'), // Purple/Lavender
+    stroke: options.stroke || (themeColors ? themeColors.stroke : '#7C5CBF'), // Darker purple border
+    strokeWidth: options.strokeWidth || (themeColors ? themeColors.strokeWidth : 2.5),
     strokeUniform: true, // Keep stroke width constant when scaling
     id: generateId(),
     shapeType: SHAPE_TYPES.TRIANGLE,

@@ -1003,4 +1003,9 @@ function handleMouseOut(e) {
 // Initialize canvas when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   initCanvas();
+
+  // Initialize flowchart theme switcher
+  if (typeof initFlowchartThemeSwitcher === 'function' && canvas) {
+    initFlowchartThemeSwitcher(canvas);
+  }
 });
