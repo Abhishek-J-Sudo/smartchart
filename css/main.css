@@ -25,29 +25,38 @@ body {
     color: white;
     display: flex;
     align-items: center;
-    padding: 0 20px;
+    padding: 0 24px;
     gap: 20px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .menu-group {
     display: flex;
-    gap: 10px;
+    gap: 8px;
 }
 
 #menu-bar button {
-    background-color: #34495e;
+    background-color: rgba(255, 255, 255, 0.15);
     color: white;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 10px 20px;
+    border-radius: 6px;
     cursor: pointer;
-    font-size: 14px;
-    transition: background-color 0.2s;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(10px);
 }
 
 #menu-bar button:hover {
-    background-color: #4a5f7f;
+    background-color: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+#menu-bar button:active {
+    transform: translateY(0);
 }
 
 /* Auto-save Notification */
@@ -142,24 +151,46 @@ body {
     top: 20px;
     right: 20px;
     display: flex;
-    gap: 10px;
+    align-items: center;
+    gap: 8px;
     z-index: 10;
 }
 
 #canvas-controls button {
-    background-color: white;
-    border: 1px solid #bdc3c7;
-    padding: 8px 12px;
-    border-radius: 4px;
+    background-color: #2c3e50;
+    border: 2px solid #2c3e50;
+    color: white;
+    padding: 10px 16px;
+    border-radius: 6px;
     cursor: pointer;
     font-size: 14px;
-    transition: all 0.2s;
+    font-weight: 600;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 6px rgba(44, 62, 80, 0.2);
 }
 
 #canvas-controls button:hover {
-    background-color: #3498db;
-    color: white;
-    border-color: #3498db;
+    background-color: #34495e;
+    border-color: #34495e;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(44, 62, 80, 0.3);
+}
+
+#canvas-controls button:active {
+    transform: translateY(0);
+}
+
+#zoom-display {
+    background-color: white;
+    border: 2px solid #2c3e50;
+    color: #2c3e50;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 700;
+    min-width: 65px;
+    text-align: center;
+    box-shadow: 0 2px 6px rgba(44, 62, 80, 0.1);
 }
 
 #canvas-help {
@@ -263,6 +294,17 @@ body {
 .shape-icon {
     position: relative;
     z-index: 1;
+}
+
+.shape-icon svg {
+    width: 100%;
+    height: 100%;
+    color: #2c3e50;
+    transition: all 0.25s;
+}
+
+.shape-item:hover .shape-icon svg {
+    color: white !important;
 }
 
 /* Properties Panel */

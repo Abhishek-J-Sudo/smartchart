@@ -559,6 +559,7 @@ function handleMouseWheel(opt) {
   canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
   currentZoom = zoom;
   updateGridPosition(); // Update grid size on zoom
+  updateZoomDisplay(); // Update zoom percentage display
 
   opt.e.preventDefault();
   opt.e.stopPropagation();
@@ -644,6 +645,7 @@ function zoomCanvas(factor) {
 
   canvas.zoomToPoint({ x: center.left, y: center.top }, currentZoom);
   updateGridPosition(); // Update grid size on zoom
+  updateZoomDisplay(); // Update zoom percentage display
   canvas.requestRenderAll();
 }
 
@@ -655,7 +657,18 @@ function resetZoom() {
   canvas.setZoom(1);
   canvas.viewportTransform = [1, 0, 0, 1, 0, 0];
   updateGridPosition(); // Reset grid position
+  updateZoomDisplay(); // Update zoom percentage display
   canvas.requestRenderAll();
+}
+
+/**
+ * Update zoom percentage display
+ */
+function updateZoomDisplay() {
+  const zoomDisplay = document.getElementById('zoom-display');
+  if (zoomDisplay) {
+    zoomDisplay.textContent = Math.round(currentZoom * 100) + '%';
+  }
 }
 
 /**

@@ -7,11 +7,31 @@ function initToolbar() {
     const palette = document.getElementById('shape-palette');
 
     const shapes = [
-        { type: SHAPE_TYPES.RECTANGLE, name: 'Rectangle', icon: '▭' },
-        { type: SHAPE_TYPES.CIRCLE, name: 'Circle', icon: '●' },
-        { type: SHAPE_TYPES.DIAMOND, name: 'Diamond', icon: '◆' },
-        { type: SHAPE_TYPES.TRIANGLE, name: 'Triangle', icon: '▲' },
-        { type: SHAPE_TYPES.TEXT, name: 'Text', icon: 'T' }
+        {
+            type: SHAPE_TYPES.RECTANGLE,
+            name: 'Rectangle',
+            svg: '<svg viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg"><rect x="5" y="5" width="90" height="70" rx="8" fill="currentColor" stroke="currentColor" stroke-width="2" opacity="0.9"/></svg>'
+        },
+        {
+            type: SHAPE_TYPES.CIRCLE,
+            name: 'Circle',
+            svg: '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="45" fill="currentColor" opacity="0.9"/></svg>'
+        },
+        {
+            type: SHAPE_TYPES.DIAMOND,
+            name: 'Diamond',
+            svg: '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><polygon points="50,5 95,50 50,95 5,50" fill="currentColor" opacity="0.9"/></svg>'
+        },
+        {
+            type: SHAPE_TYPES.TRIANGLE,
+            name: 'Triangle',
+            svg: '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><polygon points="50,10 90,90 10,90" fill="currentColor" opacity="0.9"/></svg>'
+        },
+        {
+            type: SHAPE_TYPES.TEXT,
+            name: 'Text',
+            svg: '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><text x="50" y="65" font-size="70" font-weight="600" text-anchor="middle" fill="currentColor" font-family="Arial">T</text></svg>'
+        }
     ];
 
     shapes.forEach(shape => {
@@ -28,9 +48,9 @@ function createShapeItem(shape) {
     div.className = 'shape-item';
     div.setAttribute('data-shape-type', shape.type);
     div.innerHTML = `
-        <div class="shape-icon" style="font-size: 40px; margin-bottom: 8px; transition: transform 0.2s;">${shape.icon}</div>
-        <span style="font-size: 12px; font-weight: 600; color: #495057; letter-spacing: 0.3px;">${shape.name}</span>
-        <div class="shape-hint" style="font-size: 10px; color: #adb5bd; margin-top: 4px; opacity: 0; transition: opacity 0.2s;">Click or drag</div>
+        <div class="shape-icon" style="width: 50px; height: 50px; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center;">${shape.svg}</div>
+        <span>${shape.name}</span>
+        <div class="shape-hint" style="font-size: 9px; color: #a0aec0; margin-top: 6px; opacity: 0; transition: opacity 0.25s; font-weight: 500;">Click or drag</div>
     `;
 
     // Click to add shape to canvas
